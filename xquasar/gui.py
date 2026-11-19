@@ -6,15 +6,33 @@ import threading
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import GLib, Gtk, Pango
+from gi.repository import GdkPixbuf, GLib, Gtk, Pango
 
+from .appearance import draw_quasar, load_theme, styled
+from .catalog import RULES
 from .cleaner import apply, open_home, scan
 from .gui_text import translate as tr
 
 
 GROUPS = {"thumbnail": "Thumbnail cache", "fontconfig": "Font cache",
           "browser": "Browser and Electron cache", "bytecode": "Python bytecode",
-          "flatpak": "Uninstalled Flatpak profiles", "launcher": "Obsolete Flatpak launchers"}
+          "flatpak": "Uninstalled Flatpak profiles", "launcher": "Obsolete Flatpak launchers",
+          **{key: rule.label for key, rule in RULES.items()}}
+RECOVERABLE = {"flatpak", "launcher"}
+
+
+def label(value, style):
+    return styled(Gtk.Label(label=value, xalign=0), style)
+
+
+def group_icon(kind):
+    if kind in RECOVERABLE:
+        return "folder-download-symbolic"
+    if kind == "browser" or kind.startswith("firefox_"):
+        return "web-browser-symbolic"
+    if kind in {"thumbnail", "failed_thumbnail", "matplotlib", "fontconfig", "gstreamer"}:
+        return "image-x-generic-symbolic"
+    return "applications-engineering-symbolic"
 
 
 def button(label, callback):
@@ -40,32 +58,72 @@ class CleanerWindow(Gtk.Window):
         self.scan_warnings = []
         self.busy = self.applying = self.closed = False
         self.recovery = None
-        self.set_default_size(610, 300)
-        self.set_icon_name("edit-clear")
+        self.set_default_size(750, 625)
+        load_theme(self)
         self.connect("destroy", lambda *_: setattr(self, "closed", True))
         self.connect("delete-event", lambda *_: self.applying)
 
-        header = Gtk.HeaderBar(title="XQuasar", subtitle=tr("Automatic home cleanup"), show_close_button=True)
-        self.set_titlebar(header)
+        header = styled(Gtk.HeaderBar(show_close_button=True), "quasar-bar")
+        header.set_custom_title(Gtk.Box())
+        brand = Gtk.Box(spacing=9)
+        symbol = Gtk.Image.new_from_pixbuf(self.get_icon().scale_simple(30, 30, GdkPixbuf.InterpType.BILINEAR))
+        brand.pack_start(symbol, False, False, 0)
+        brand.pack_start(label("XQuasar", "brand"), False, False, 0)
+        header.pack_start(brand)
         self.rescan_button = button("Scan again", self.refresh)
-        header.pack_start(self.rescan_button)
+        header.pack_end(self.rescan_button)
+        self.set_titlebar(header)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, border_width=14)
-        self.add(box)
-        location = Gtk.Label(label=str(path), xalign=0, ellipsize=Pango.EllipsizeMode.MIDDLE)
+        shell = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.add(shell)
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        shell.pack_start(scroll, True, True, 0)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, border_width=18)
+        scroll.add(box)
+
+        hero = Gtk.Overlay()
+        art = Gtk.DrawingArea(height_request=166)
+        art.connect("draw", draw_quasar)
+        hero.add(art)
+        info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1, margin_start=23,
+                       margin_end=18, valign=Gtk.Align.CENTER)
+        info.pack_start(label(tr("Cache to clear"), "hero-label"), False, False, 0)
+        self.cache_total = label("—", "hero-total")
+        info.pack_start(self.cache_total, False, False, 0)
+        location = label(str(path), "hero-path")
+        location.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         location.set_tooltip_text(str(path))
-        box.pack_start(location, False, False, 0)
-        grid = Gtk.Grid(row_spacing=8, column_spacing=20, border_width=10)
-        frame = Gtk.Frame()
-        frame.add(grid)
-        box.pack_start(frame, False, False, 0)
+        info.pack_start(location, False, False, 0)
+        hero.add_overlay(info)
+        box.pack_start(hero, False, False, 0)
+
+        heading = Gtk.Box(spacing=8)
+        heading.pack_start(label(tr("Cleanup plan"), "section"), True, True, 0)
+        self.all_rules = Gtk.ToggleButton(label=tr("All checks ({n})", n=len(GROUPS)))
+        self.all_rules.connect("toggled", self.filter_rows)
+        heading.pack_end(self.all_rules, False, False, 0)
+        box.pack_start(heading, False, False, 0)
+        self.rows = {}
         self.counts = {}
-        for row, (kind, name) in enumerate(GROUPS.items()):
-            grid.attach(Gtk.Label(label=tr(name), xalign=0, hexpand=True), 0, row, 1, 1)
-            count = Gtk.Label(label="—", xalign=1)
-            grid.attach(count, 1, row, 1, 1)
-            self.counts[kind] = count
-        box.pack_start(Gtk.Label(label=tr("Personal folders are kept."), xalign=0), False, False, 0)
+        self.present = set()
+        rows = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        for kind, name in GROUPS.items():
+            row = styled(Gtk.Box(spacing=10), "plan-row")
+            icon = styled(Gtk.Image.new_from_icon_name(group_icon(kind), Gtk.IconSize.MENU), "row-icon")
+            if kind in RECOVERABLE:
+                styled(icon, "recover")
+            row.pack_start(icon, False, False, 0)
+            title = label(tr(name), "row-name")
+            title.set_line_wrap(True)
+            row.pack_start(title, True, True, 0)
+            count = label("—", "row-count")
+            row.pack_end(count, False, False, 0)
+            rows.pack_start(row, False, False, 0)
+            self.rows[kind], self.counts[kind] = row, count
+        box.pack_start(rows, False, False, 0)
+        self.empty_state = label(tr("Nothing to clean"), "empty")
+        box.pack_start(self.empty_state, False, False, 0)
 
         self.paths, self.path_text = text_panel("Show paths")
         self.paths.connect("notify::expanded", self.show_paths)
@@ -73,16 +131,19 @@ class CleanerWindow(Gtk.Window):
         self.details, self.detail_text = text_panel("Some items were skipped")
         box.pack_start(self.details, False, False, 0)
 
-        footer = Gtk.Box(spacing=8)
-        box.pack_end(footer, False, False, 0)
+        footer = styled(Gtk.Box(spacing=10), "bottom-bar")
+        shell.pack_end(footer, False, False, 0)
         self.spinner = Gtk.Spinner()
         footer.pack_start(self.spinner, False, False, 0)
-        self.status = Gtk.Label(xalign=0, wrap=True)
-        footer.pack_start(self.status, True, True, 0)
+        feedback = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        self.status = label("", "row-name")
+        self.status.set_line_wrap(True)
+        feedback.pack_start(self.status, False, False, 0)
+        feedback.pack_start(label(tr("Personal folders are kept."), "muted"), False, False, 0)
+        footer.pack_start(feedback, True, True, 0)
         self.recovery_button = button("Open recovery folder", self.open_recovery)
-        footer.pack_start(self.recovery_button, False, False, 0)
-        self.clean_button = button("Clean up…", self.clean)
-        self.clean_button.get_style_context().add_class("suggested-action")
+        box.pack_start(self.recovery_button, False, False, 0)
+        self.clean_button = styled(button("Clean up…", self.clean), "primary")
         footer.pack_end(self.clean_button, False, False, 0)
         self.show_all()
         self.recovery_button.hide()
@@ -92,15 +153,24 @@ class CleanerWindow(Gtk.Window):
         self.rescan_button.set_sensitive(not self.busy)
         self.clean_button.set_sensitive(bool(self.plan) and not self.busy)
 
+    def filter_rows(self, *_):
+        show_all = self.all_rules.get_active()
+        for kind, row in self.rows.items():
+            row.set_visible(show_all or kind in self.present)
+        self.empty_state.set_visible(not show_all and not self.present and not self.busy)
+
     def show_plan(self, items):
         self.plan = items
         totals = {kind: [0, 0] for kind in GROUPS}
         for item in items:
             totals[item.kind][0] += 1
             totals[item.kind][1] += item.size
+        self.present = {kind for kind, (count, _) in totals.items() if count}
+        self.filter_rows()
+        self.cache_total.set_text(GLib.format_size(sum(item.size for item in items if item.is_cache)))
         for kind, (count, size) in totals.items():
             value = str(count)
-            if kind not in {"flatpak", "launcher"} and count:
+            if kind not in RECOVERABLE and count:
                 value += " · " + GLib.format_size(size)
             self.counts[kind].set_text(value)
         self.paths.set_visible(bool(items))
@@ -122,6 +192,7 @@ class CleanerWindow(Gtk.Window):
 
     def run_job(self, operation, finish, status, *args):
         self.busy = True
+        self.empty_state.hide()
         self.status.set_text(tr(status))
         self.spinner.start()
         self.update_buttons()
@@ -135,6 +206,8 @@ class CleanerWindow(Gtk.Window):
                 finish(*result)
             else:
                 self.show_plan([])
+                self.empty_state.hide()
+                self.cache_total.set_text("—")
                 self.status.set_text(tr("Could not complete the operation"))
                 self.warnings([error])
             self.update_buttons()
@@ -155,12 +228,14 @@ class CleanerWindow(Gtk.Window):
         self.show_plan([])
         for count in self.counts.values():
             count.set_text("—")
+        self.cache_total.set_text("—")
         self.scan_warnings = []
         self.warnings([])
         self.run_job(scan, self.scanned, "Scanning…")
 
     def scanned(self, items, warnings):
         self.show_plan(items)
+        self.empty_state.set_text(tr("Scan incomplete" if warnings else "Nothing to clean"))
         self.scan_warnings = warnings
         self.warnings(warnings)
         if items:
@@ -174,10 +249,13 @@ class CleanerWindow(Gtk.Window):
         cached = sum(item.is_cache for item in self.plan)
         dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
                                    text=tr("Apply this cleanup plan?"))
+        styled(dialog, "quasar")
         summary = [tr("Delete cache files: {n}", n=cached),
                    tr("Move to recovery (profiles and launchers): {n}", n=len(self.plan) - cached)]
         if any(item.kind in {"browser", "bytecode"} for item in self.plan):
             summary.append(tr("Browser and Python cache folders emptied by this cleanup are removed."))
+        if any(item.kind in {"pip", "cargo", "nuget", "npm", "composer"} for item in self.plan):
+            summary.append(tr("Package managers may need to download these archives again."))
         dialog.format_secondary_text("\n".join(summary))
         dialog.add_buttons(tr("Cancel"), Gtk.ResponseType.CANCEL, tr("Clean"), Gtk.ResponseType.OK)
         dialog.set_default_response(Gtk.ResponseType.CANCEL)
@@ -190,6 +268,8 @@ class CleanerWindow(Gtk.Window):
     def cleaned(self, done, failures, session):
         count = len(self.plan)
         self.show_plan([])
+        self.empty_state.set_text(tr("Scan again"))
+        self.empty_state.hide()
         self.status.set_text(tr("Cleaned {n} of {total}", n=len(done), total=count))
         self.warnings([*self.scan_warnings, *failures])
         if any(not item.is_cache for item in done):

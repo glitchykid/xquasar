@@ -75,6 +75,16 @@ class DesktopFlow(unittest.TestCase):
         self.assertEqual((self.app / "profile").read_text(), "keep")
         self.assertFalse(self.window.clean_button.get_sensitive())
 
+    def test_summary_and_rule_catalog(self):
+        self.assertEqual(self.window.cache_total.get_text(), GLib.format_size(self.cache.stat().st_size))
+        self.assertTrue(self.window.rows["thumbnail"].get_visible())
+        self.assertFalse(self.window.rows["cargo"].get_visible())
+        self.window.all_rules.set_active(True)
+        self.assertTrue(self.window.rows["cargo"].get_visible())
+        self.assertEqual(len(self.window.rows), 20)
+        self.window.all_rules.set_active(False)
+        self.assertFalse(self.window.rows["cargo"].get_visible())
+
     @unittest.skipUnless(shutil.which("flatpak"), "Flatpak CLI unavailable")
     def test_auto_detected_profile_moves_to_recovery(self):
         profile = self.home / ".var/app/org.example.XQuasarDesktopFixture"

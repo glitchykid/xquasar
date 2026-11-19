@@ -2,6 +2,8 @@
 !Dockerfile
 !xquasar/
 !xquasar/*.py
+!xquasar/window.css
+!xquasar/xquasar.svg
 !tests/
 !tests/*.py
 !packaging/

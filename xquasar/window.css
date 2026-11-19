@@ -1,0 +1,29 @@
+.quasar { background: #11131d; color: #f1eefb; font-family: "Inter", "Cantarell", sans-serif; }
+.quasar label { color: #e7e6f0; }
+.quasar headerbar, headerbar.quasar-bar { background: #141621; border: none; border-bottom: 1px solid #303143; box-shadow: none; padding: 4px 12px; }
+.quasar .brand { font-size: 21px; font-weight: 800; letter-spacing: -0.8px; }
+.quasar .section { color: #f0eff9; font-weight: bold; font-size: 17px; }
+.quasar .muted, .quasar .row-count { color: #b2b3c6; }
+.quasar .hero-label { color: #ddd8f7; font-size: 15px; font-weight: bold; }
+.quasar .hero-total { color: #faf8ff; font-weight: 800; font-size: 46px; letter-spacing: -2px; }
+.quasar .hero-path { color: #bebbd3; font-family: monospace; font-size: 12px; }
+.quasar .plan-row { background: #1b1d2b; border: 1px solid #2c3043; border-radius: 8px; padding: 7px 12px; }
+.quasar .row-name { font-size: 14px; font-weight: bold; }
+.quasar .row-icon { background: #2d2943; color: #cec0fc; padding: 6px; border-radius: 6px; }
+.quasar .row-icon.recover { background: #193830; color: #8fe7c6; }
+.quasar .row-count { font-family: monospace; font-size: 13px; }
+.quasar .bottom-bar { background: #161824; border-top: 1px solid #303143; padding: 12px 18px; }
+.quasar .empty { color: #aaaac0; padding: 8px; }
+.quasar button { background: #252839; border: 1px solid #383c50; border-radius: 7px; color: #eff0ff; box-shadow: none; text-shadow: none; padding: 6px 12px; }
+.quasar button label { color: inherit; }
+.quasar button:hover { background: #33374c; }
+.quasar button:checked { background: #373149; color: #dfcfff; border-color: #7f6caa; }
+.quasar button:focus, .quasar expander:focus { outline: 2px solid #c0a6ff; outline-offset: -2px; }
+.quasar button.primary { background: #91ebcf; color: #10251f; border-color: #91ebcf; font-weight: bold; padding: 9px 19px; }
+.quasar button.primary:hover { background: #b3f5df; }
+.quasar button:disabled { background: #222432; color: #888b9b; border-color: #333546; }
+.quasar .path-toggle { color: #c6b6ef; }
+.quasar textview text { background: #191b27; color: #dcdae9; font-family: monospace; }
+.quasar viewport { background: transparent; }
+.quasar scrollbar, .quasar scrollbar trough { background: #171923; }
+.quasar scrollbar slider { background: #606278; }

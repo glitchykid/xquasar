@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 import sys
 
+from .catalog import RULES
 from .cleaner import apply, manual_path, open_home, scan
 
 
@@ -52,7 +53,9 @@ def main():
             for index, item in enumerate(items, 1):
                 action = {"browser": "delete browser cache", "bytecode": "delete Python cache",
                           "launcher": "recoverable move", "fontconfig": "delete font cache", "thumbnail": "delete thumbnail",
-                          "manual": "recoverable move", "flatpak": "recoverable move"}[item.kind]
+                          "manual": "recoverable move", "flatpak": "recoverable move"}.get(item.kind)
+                if item.kind in RULES:
+                    action = "delete cache: " + RULES[item.kind].label
                 print(f"{index:4}  {item.kind:9}  {str(item.path)!r}  ({action})")
             if not items:
                 print("No cleanup candidates.")

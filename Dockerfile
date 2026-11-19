@@ -1,6 +1,6 @@
 FROM python:3.15.2-slim-trixie
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends flatpak python3-gi gir1.2-gtk-3.0 xvfb xauth xdotool desktop-file-utils \
+    && apt-get install --yes --no-install-recommends flatpak python3-gi python3-gi-cairo librsvg2-common gir1.2-gtk-3.0 xvfb xauth xdotool desktop-file-utils \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 10001 quasar
 WORKDIR /workspace

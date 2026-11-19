@@ -10,7 +10,7 @@ import stat
 import subprocess
 from uuid import uuid4
 
-from . import app_data
+from . import app_data, catalog
 
 
 DIRECTORY = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -101,7 +101,7 @@ class Candidate:
 
     @property
     def is_cache(self):
-        return self.kind in {"thumbnail", "fontconfig", "browser", "bytecode"}
+        return self.kind in {"thumbnail", "fontconfig", "browser", "bytecode"} or self.kind in catalog.RULES
 
     @property
     def flatpak_id(self):
@@ -147,7 +147,9 @@ def identify_cache(home, parent, folder, entry, kind, pattern):
     match = pattern.fullmatch(entry.name)
     if not match or not entry.is_file(follow_symlinks=False):
         return None
-    if kind == "fontconfig":
+    if kind in catalog.RULES:
+        header = None
+    elif kind == "fontconfig":
         order = "little" if match[1] == "le" else "big"
         header = (0xFC02FC04).to_bytes(4, order) + int(match[2]).to_bytes(4, order)
     elif kind == "browser":
@@ -162,7 +164,11 @@ def identify_cache(home, parent, folder, entry, kind, pattern):
     fd = os.open(entry.name, flags, dir_fd=parent)
     try:
         info = os.fstat(fd)
-        if stat.S_ISREG(info.st_mode) and mount_id(fd) == home.mount and os.read(fd, len(header)) == header:
+        if not stat.S_ISREG(info.st_mode) or mount_id(fd) != home.mount:
+            return None
+        matched = (catalog.matches(kind, fd, info, folder, match) if header is None
+                   else os.read(fd, len(header)) == header)
+        if matched and os.fstat(fd).st_ctime_ns == info.st_ctime_ns:
             return Candidate.from_stat(kind, folder / entry.name, info)
     finally:
         os.close(fd)
@@ -182,6 +188,7 @@ def cache_files(home, roots, found, warnings):
     app_roots = {root for root in roots.values() if root is not None}
     folders.extend(app_data.browser_cache_folders(home, app_roots, warnings))
     folders.extend(app_data.python_cache_folders(home, warnings))
+    folders.extend(catalog.folders(home, roots, warnings))
     for folder, kind, pattern in folders:
         try:
             with home.directory(folder) as parent, os.scandir(parent) as entries:

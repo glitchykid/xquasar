@@ -10,7 +10,8 @@ trap 'rm -rf -- "$stage"' EXIT
 chmod 755 "$stage"
 modules="$stage/usr/lib/python3/dist-packages/xquasar"
 mkdir -p "$stage/DEBIAN" "$modules"
-install -m 644 xquasar/*.py "$modules/"
+install -m 644 xquasar/*.py xquasar/window.css xquasar/xquasar.svg "$modules/"
+install -Dm644 xquasar/xquasar.svg "$stage/usr/share/icons/hicolor/scalable/apps/xquasar.svg"
 install -Dm755 packaging/xquasar "$stage/usr/bin/xquasar"
 install -Dm644 packaging/xquasar.desktop "$stage/usr/share/applications/xquasar.desktop"
 cat > "$stage/DEBIAN/control" <<EOF
@@ -18,7 +19,7 @@ Package: xquasar
 Version: $version
 Architecture: all
 Maintainer: XQuasar project <217289399+glitchykid@users.noreply.github.com>
-Depends: python3 (>= 3.12), python3-gi, gir1.2-gtk-3.0
+Depends: python3 (>= 3.12), python3-gi, python3-gi-cairo, librsvg2-common, gir1.2-gtk-3.0
 Suggests: flatpak
 Section: utils
 Priority: optional
