@@ -10,19 +10,7 @@ The image targets Python 3.15.2. The CLI also supports Python 3.12+. Filesystem 
 
 ## GitHub Wiki
 
-Edit the Markdown sources in `docs/wiki/` together. For a new repository, save an initial Home page in GitHub's Wiki tab. The Wiki is a separate Git repository. From the project root, publish the reviewed pages to a fresh checkout with an account that can write to it. Review the diff before committing. The conversion below uses the Wiki's extensionless page URLs.
-
-```sh
-git clone https://github.com/glitchykid/xquasar.wiki.git ../xquasar.wiki
-for page in docs/wiki/*.md; do
-  sed -E 's/\]\((Guide-[A-Z]+)\.md\)/](\1)/g' "$page" > "../xquasar.wiki/$(basename "$page")"
-done
-git -C ../xquasar.wiki diff
-git -C ../xquasar.wiki add -- Home.md Guide-EN.md Guide-RU.md Guide-JA.md Guide-KO.md Guide-ZH.md
-git -C ../xquasar.wiki diff --cached
-git -C ../xquasar.wiki commit -m "Update multilingual cleanup guide"
-git -C ../xquasar.wiki push
-```
+Edit the Markdown sources in `docs/wiki/` together. To initialize GitHub Wiki, save an initial Home page in the repository's Wiki tab. The Publish Wiki workflow copies the guides and Home page into the separate Wiki repository, converting links to Wiki page URLs. It runs when a Wiki page is created or guide sources change on main. Maintainers can also run it from the Actions tab. Edit the managed pages in the source repository so changes survive the next publication.
 
 Verify the five language links from the published Home page. [Editing GitHub Wikis](https://docs.github.com/en/communities/documenting-your-project-with-wikis/adding-or-editing-wiki-pages)
 

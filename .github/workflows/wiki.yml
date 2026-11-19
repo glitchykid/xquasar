@@ -1,0 +1,42 @@
+name: Publish Wiki
+on:
+  gollum:
+  push:
+    branches: [main]
+    paths: ['docs/wiki/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-wiki
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main' && (github.event_name != 'gollum' || contains(github.event.pages.*.action, 'created'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Publish translated pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh auth setup-git --hostname github.com
+          wiki="$RUNNER_TEMP/wiki"
+          git clone "https://github.com/$GITHUB_REPOSITORY.wiki.git" "$wiki"
+          for page in docs/wiki/*.md; do
+            name=$(basename "$page")
+            sed -E 's/\]\((Guide-[A-Z]+)\.md\)/](\1)/g' "$page" > "$RUNNER_TEMP/rendered-page"
+            mv -fT -- "$RUNNER_TEMP/rendered-page" "$wiki/$name"
+            git -C "$wiki" add -- "$name"
+          done
+          if ! git -C "$wiki" diff --cached --quiet; then
+            git -C "$wiki" -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "Publish multilingual XQuasar guides"
+            git -C "$wiki" push
+          fi
