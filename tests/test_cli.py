@@ -39,6 +39,23 @@ class CleanerCLI(unittest.TestCase):
         tool.write_text("#!/bin/sh\n" + script)
         tool.chmod(0o755)
 
+    def test_apt_profile_is_automatic_in_preview_and_confirmed_cleanup(self):
+        tool = self.bin / "dpkg-query"
+        tool.write_text("#!/bin/sh\nprintf 'filezilla\\tconfig-files\\n'\n")
+        tool.chmod(0o755)
+        self.flatpak("exit 0")
+        folder = self.directory(".config/filezilla")
+        (folder / "settings").write_text("preserve")
+        preview = self.cli()
+        self.assertEqual(preview.returncode, 0, preview.stderr)
+        self.assertIn("apt", preview.stdout)
+        self.assertIn("recoverable move", preview.stdout)
+        self.assertTrue(folder.exists())
+        run = self.cli("--clean", answer="yes\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
+        saved, = (self.home / ".xquasar-recovery").glob("*/.config/filezilla/settings")
+        self.assertEqual(saved.read_text(), "preserve")
+
     def test_preview_then_cancel_leaves_home_intact(self):
         target = self.directory("old-empty")
         preview = self.cli()

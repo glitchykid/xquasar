@@ -12,6 +12,10 @@ class ApplicationData(unittest.TestCase):
     def setUp(self):
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.home = self.enterContext(open_home(self.root))
+        proc = self.root / "proc"
+        proc.mkdir()
+        (proc / str(os.getpid())).symlink_to("/proc/self")
+        self.enterContext(patch("xquasar.activity.PROC", proc))
         self.enterContext(patch.dict(os.environ, {
             key: str(self.root / rel) for key, rel in [
                 ("XDG_CONFIG_HOME", ".config"), ("XDG_DATA_HOME", ".local/share"),

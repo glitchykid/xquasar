@@ -8,9 +8,10 @@ from pathlib import Path
 import re
 import stat
 import subprocess
+import time
 from uuid import uuid4
 
-from . import app_data, catalog
+from . import activity, app_data, catalog, native
 
 
 DIRECTORY = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -254,17 +255,27 @@ def flatpak_items(home, roots, found, warnings):
         found.extend(item for item in possible if item.flatpak_id not in installed)
 
 
+def xdg_roots(home):
+    return {key: xdg_relative(home, "XDG_" + key.upper() + "_HOME", default)
+            for key, default in (("config", ".config"), ("cache", ".cache"),
+                                 ("data", ".local/share"), ("state", ".local/state"))}
+
+
+def native_items(home, roots, warnings):
+    return [Candidate.from_stat(kind, path, info)
+            for kind, path, info in native.profiles(home, roots, warnings, installed_apps)]
+
+
 def scan(home, manual=()):
     found, warnings = [], []
-    roots = {key: xdg_relative(home, "XDG_" + key.upper() + "_HOME", default)
-             for key, default in (("config", ".config"), ("cache", ".cache"),
-                                  ("data", ".local/share"), ("state", ".local/state"))}
+    roots = xdg_roots(home)
     cache_files(home, roots, found, warnings)
+    found.extend(native_items(home, roots, warnings))
     try:
         flatpak_items(home, roots, found, warnings)
     except OSError as exc:
         warnings.append(f"Flatpak: {exc}")
-    for path in set(manual):
+    for path in set(manual) - {item.path for item in found}:
         try:
             with home.directory(path) as fd:
                 found.append(Candidate.from_stat("manual", path, os.fstat(fd)))
@@ -272,6 +283,12 @@ def scan(home, manual=()):
             warnings.append(f"{str(path)!r}: {exc}")
     moved_dirs = {item.path for item in found if not item.is_cache}
     plan = [item for item in found if moved_dirs.isdisjoint(item.path.parents)]
+    if plan:
+        try:
+            running = activity.snapshot(home, roots)
+        except OSError as exc:
+            return [], warnings + [str(exc)]
+        plan = [item for item in plan if not running.busy(item)]
     return sorted(set(plan), key=lambda item: item.path), warnings
 
 
@@ -296,9 +313,22 @@ def apply(home, selected):
         except OSError as exc:
             warnings.append(str(exc))
     session = RECOVERY / uuid4().hex
+    roots = xdg_roots(home)
+    refresh = 0
     for item in selected:
         path = item.path
         try:
+            if item.kind in ("apt", "snap") and item not in native_items(home, roots, warnings):
+                raise OSError("package removal could not be confirmed again")
+            if not item.is_cache or time.monotonic() >= refresh:
+                try:
+                    running = activity.snapshot(home, roots)
+                except OSError as exc:
+                    warnings.append(str(exc))
+                    break
+                refresh = time.monotonic() + 0.5
+            if running.busy(item):
+                raise OSError("application is in use")
             with home.directory(path.parent) as parent:
                 info = os.stat(path.name, dir_fd=parent, follow_symlinks=False)
                 if Candidate.from_stat(item.kind, path, info) != item:
@@ -309,7 +339,7 @@ def apply(home, selected):
                     os.unlink(path.name, dir_fd=parent)
                     if item.kind in {"bytecode", "browser"}:
                         prune_cache_dir(home, path.parent, parent, warnings)
-                elif item.kind == "manual" or item.flatpak_id:
+                elif item.kind in {"manual", "apt", "snap"} or item.flatpak_id:
                     if item.flatpak_id and (installed is None or item.flatpak_id in installed):
                         raise OSError("Flatpak removal could not be confirmed")
                     with home.directory(session / path.parent, private=True, create=True) as dest:

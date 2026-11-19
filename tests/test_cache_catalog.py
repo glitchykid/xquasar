@@ -44,6 +44,10 @@ class CacheCatalog(unittest.TestCase):
     def setUp(self):
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.home = self.enterContext(open_home(self.root))
+        proc = self.root / "proc"
+        proc.mkdir()
+        (proc / str(os.getpid())).symlink_to("/proc/self")
+        self.enterContext(patch("xquasar.activity.PROC", proc))
         self.enterContext(patch.dict(os.environ, {
             "XDG_CACHE_HOME": str(self.root / ".cache"), "XDG_DATA_HOME": str(self.root / ".local/share"),
             "XDG_CONFIG_HOME": str(self.root / ".config"), "XDG_STATE_HOME": str(self.root / ".local/state"),

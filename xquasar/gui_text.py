@@ -5,6 +5,8 @@ import os
 
 # English source text followed by Russian, Japanese, Korean and Simplified Chinese.
 LABELS = {
+    "Removed APT profiles": ("Профили удалённых APT-приложений", "APT で削除したアプリのプロファイル", "APT로 삭제한 앱 프로필", "已通过 APT 卸载的应用配置"),
+    "Removed Snap profiles": ("Профили удалённых Snap-приложений", "削除済み Snap のプロファイル", "삭제한 Snap 앱 프로필", "已卸载 Snap 应用的配置"),
     "Package managers may need to download these archives again.": ("Менеджерам пакетов может потребоваться повторно скачать эти архивы.", "パッケージ管理ツールがアーカイブを再度ダウンロードする場合があります。", "패키지 관리자가 이 파일을 다시 다운로드해야 할 수 있습니다.", "包管理器可能需要重新下载这些归档。"),
     "Cache to clear": ("Кэш к очистке", "整理できるキャッシュ", "정리할 캐시", "可清理的缓存"),
     "Cleanup plan": ("План очистки", "整理の候補", "정리 계획", "清理计划"),

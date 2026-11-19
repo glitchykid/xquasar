@@ -6,6 +6,7 @@ import threading
 import gi
 
 gi.require_version("Gtk", "3.0")
+gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, GLib, Gtk, Pango
 
 from .appearance import draw_quasar, load_theme, styled
@@ -17,8 +18,9 @@ from .gui_text import translate as tr
 GROUPS = {"thumbnail": "Thumbnail cache", "fontconfig": "Font cache",
           "browser": "Browser and Electron cache", "bytecode": "Python bytecode",
           "flatpak": "Uninstalled Flatpak profiles", "launcher": "Obsolete Flatpak launchers",
+          "apt": "Removed APT profiles", "snap": "Removed Snap profiles",
           **{key: rule.label for key, rule in RULES.items()}}
-RECOVERABLE = {"flatpak", "launcher"}
+RECOVERABLE = {"flatpak", "launcher", "apt", "snap"}
 
 
 def label(value, style):

@@ -81,7 +81,7 @@ class DesktopFlow(unittest.TestCase):
         self.assertFalse(self.window.rows["cargo"].get_visible())
         self.window.all_rules.set_active(True)
         self.assertTrue(self.window.rows["cargo"].get_visible())
-        self.assertEqual(len(self.window.rows), 20)
+        self.assertEqual(len(self.window.rows), 22)
         self.window.all_rules.set_active(False)
         self.assertFalse(self.window.rows["cargo"].get_visible())
 
@@ -98,6 +98,20 @@ class DesktopFlow(unittest.TestCase):
         self.assertEqual(saved.read_text(), "saved")
         self.assertTrue(self.window.recovery_button.get_visible())
         self.assertTrue(self.app.exists())
+
+    def test_confirmed_snap_shown_and_restorable_from_desktop(self):
+        profile = self.home / "snap/test-xquasar/common"
+        profile.mkdir(parents=True)
+        (profile / "settings").write_text("keep")
+        with patch("xquasar.native.snap_state", return_value=(set(), {"test-xquasar"})):
+            self.window.rescan_button.clicked()
+            self.idle()
+            self.assertTrue(self.window.rows["snap"].get_visible())
+            self.assertEqual(self.window.counts["snap"].get_text(), "1")
+            self.confirm(Gtk.ResponseType.OK)
+            self.assertFalse(profile.exists())
+            saved, = (self.home / ".xquasar-recovery").glob("*/snap/test-xquasar/common/settings")
+            self.assertEqual(saved.read_text(), "keep")
 
     def test_changed_item_and_rescan(self):
         self.cache.write_bytes(b"new content")

@@ -2,9 +2,13 @@
 
 # Automatic cleanup and recovery
 
-1. The dark preview shows the total size of recognised cache files and the categories found on this scan. **All checks (20)** opens the rule catalog, including categories with zero matches.
+1. The dark preview shows the total size of recognised cache files and the categories found on this scan. **All checks (22)** opens the rule catalog, including categories with zero matches.
 2. Choose **Show paths** to inspect the candidates. **Clean up…** shows the number of cache files to delete and items to move before asking for confirmation.
 3. After cleanup, choose **Open recovery folder** to find a saved launcher or profile. To restore it, close the affected app and move the item back to its original path. If a replacement already exists, keep both copies and compare them first.
+
+**APT and Snap profiles** — For qBittorrent, VLC, mpv, Inkscape, Audacity and FileZilla, XQuasar knows the specific profile locations under `.config`, `.local`, `.cache` and older hidden directories. It checks completed APT transactions or dpkg’s residual-configuration state against the current inventory. For Snap, a recorded removal and the absence of all installed revisions identify an instance under `~/snap` or `~/.snap/data`. An expired history can leave old profiles unidentified.
+
+**Running applications** — XQuasar checks user processes during preview and again during cleanup. It skips profiles and caches it can associate with a running app, including Firefox HTTP cache. Close the app and scan again to include its cache. Confirmed leftover profiles move intact to recovery.
 
 **Firefox and desktop caches** — HTTP entries, startup data, compiled scripts, URL and extension startup caches are identified in supported Firefox profiles. Other checks recognise failed thumbnail records, the GStreamer plugin registry and Matplotlib font lists.
 

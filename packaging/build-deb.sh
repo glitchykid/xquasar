@@ -26,6 +26,6 @@ Priority: optional
 Homepage: https://github.com/glitchykid/xquasar
 Description: Interactive Linux home folder cleaner
  Find regenerable caches in Linux home and XDG application directories.
- Confirm cleanup and recover profiles or launchers left by uninstalled Flatpaks.
+ Preview cleanup and recover profiles of removed APT, Snap and Flatpak apps.
 EOF
 dpkg-deb --root-owner-group --build "$stage" "$output"

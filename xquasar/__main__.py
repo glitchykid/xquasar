@@ -53,6 +53,7 @@ def main():
             for index, item in enumerate(items, 1):
                 action = {"browser": "delete browser cache", "bytecode": "delete Python cache",
                           "launcher": "recoverable move", "fontconfig": "delete font cache", "thumbnail": "delete thumbnail",
+                          "apt": "recoverable move", "snap": "recoverable move",
                           "manual": "recoverable move", "flatpak": "recoverable move"}.get(item.kind)
                 if item.kind in RULES:
                     action = "delete cache: " + RULES[item.kind].label
