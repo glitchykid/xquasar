@@ -40,4 +40,9 @@ jobs:
           git archive --format=tar.gz --prefix="xquasar-$TAG/" --output="$archive" HEAD
           tar -xzf "$archive" -C "$RUNNER_TEMP"
           (cd "$RUNNER_TEMP/xquasar-$TAG" && python3 -m xquasar --help)
-          gh release create "$TAG" "$archive" --verify-tag --title "XQuasar $TAG" --notes-file "$notes"
+          package="$RUNNER_TEMP/xquasar.deb"
+          sh packaging/build-deb.sh "${TAG#v}" "$package"
+          sudo apt-get update -qq
+          sudo apt-get install -y "$package" xvfb xauth xdotool
+          xvfb-run -a /usr/bin/python3 packaging/test-desktop.py
+          gh release create "$TAG" "$archive" "$package" --verify-tag --title "XQuasar $TAG" --notes-file "$notes"

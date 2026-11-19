@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=XQuasar
+GenericName=Home Folder Cleaner
+GenericName[ru]=Очистка домашней папки
+GenericName[ja]=ホームフォルダーの整理
+GenericName[ko]=홈 폴더 정리
+GenericName[zh_CN]=主目录清理
+Comment=Review and clean selected items in your home folder
+Comment[ru]=Посмотреть и очистить выбранные позиции в домашней папке
+Exec=/usr/bin/xquasar --gui
+Icon=edit-clear
+Terminal=false
+Categories=Utility;FileTools;
+Keywords=cleanup;cache;Flatpak;
+Keywords[ru]=очистка;кэш;мусор;Flatpak;

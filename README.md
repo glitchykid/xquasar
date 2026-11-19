@@ -4,7 +4,15 @@
 
 XQuasar previews cleanup candidates in your Linux home directory. Each row shows the path and the action. You choose which items to clean.
 
-## Quick start
+## Install on Linux Mint, Ubuntu or Debian
+
+[Download XQuasar (.deb)](https://github.com/glitchykid/xquasar/releases/latest/download/xquasar.deb)
+
+Open the downloaded file and click **Install**. Launch **XQuasar** from the applications menu. The package manager installs the desktop components. A distribution with Python 3.12 or newer is required.
+
+The window opens with a preview. Tick the items you want, choose **Clean selected…**, review the deletion and recovery counts, then confirm. **Open recovery folder** takes you to any app profiles moved by this cleanup.
+
+## Run the CLI from source
 
 Use Linux and Python 3.12 or newer. Install Git to clone the source. Flatpak is optional and enables automatic detection of its leftover data. Run as the owner of the home directory.
 

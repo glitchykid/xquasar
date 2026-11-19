@@ -26,12 +26,21 @@ def choose(items):
 
 def main():
     parser = argparse.ArgumentParser(prog="xquasar", description="Preview Linux home cleanup.")
-    parser.add_argument("--clean", action="store_true", help="select items and confirm cleanup")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--clean", action="store_true", help="select items and confirm cleanup")
+    mode.add_argument("--gui", action="store_true", help="open the desktop cleanup window")
     parser.add_argument("--leftover", action="append", default=[], metavar="APP_DIR",
                         help="include a home-relative app directory, e.g. .config/OldEditor")
     args = parser.parse_args()
     try:
         manual = [manual_path(path) for path in args.leftover]
+        if args.gui:
+            try:
+                from .gui import run
+            except (ImportError, ValueError):
+                parser.exit(2, "XQuasar GUI requires GTK 3 and PyGObject. On Mint or Ubuntu install "
+                            "python3-gi and gir1.2-gtk-3.0, or use the XQuasar .deb package.\n")
+            return run(manual)
         with open_home(Path.home()) as home:
             items, warnings = scan(home, manual)
             for warning in warnings:

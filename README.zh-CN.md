@@ -4,7 +4,15 @@
 
 XQuasar 会扫描 Linux 主目录，列出可以清理的项目。每行都会显示路径和处理方式，由你选择要清理的内容。
 
-## 快速开始
+## 在 Linux Mint、Ubuntu 或 Debian 上安装
+
+[下载 XQuasar（.deb）](https://github.com/glitchykid/xquasar/releases/latest/download/xquasar.deb)
+
+打开下载的文件，点击**安装**，然后在应用程序菜单中启动 **XQuasar**。包管理器会一并安装图形界面所需的组件。需要发行版提供 Python 3.12 或更高版本。
+
+启动后会先显示预览。勾选项目，点击**清理所选项…**，核对永久删除和移入恢复目录的数量后确认。如果移动了应用配置，可以点击**打开恢复目录**查看。
+
+## 从源码运行命令行工具
 
 需要 Linux 和 Python 3.12 或更高版本。使用 Git 克隆源码。如果安装了 Flatpak，程序还能自动识别已卸载的 Flatpak 应用留下的数据。请使用主目录所属的用户账号运行。
 

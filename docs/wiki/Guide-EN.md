@@ -2,6 +2,8 @@
 
 # Cleaning and restoring an application profile
 
+From the applications menu, open **XQuasar**. Use **Add app folder…** for a leftover profile, check its row, then choose **Clean selected…** and confirm. **Open recovery folder** opens the saved profile’s location. To use the terminal instead, follow the steps below.
+
 1. Close the application and run `python3 -m xquasar --leftover .config/OldEditor` from the source directory. Replace the example with a directory belonging to an app you removed. The preview shows what would happen to each path.
 2. Repeat the command with `--clean`. Enter just the number of the app folder, then type `yes`. Flatpak folders found automatically use the same recovery mechanism.
 3. Copy the recovery directory printed at the end. In your file manager, enable hidden files and open the original relative path inside that directory, for example `.config/OldEditor`. Its contents are still available.

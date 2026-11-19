@@ -4,3 +4,6 @@
 !xquasar/*.py
 !tests/
 !tests/*.py
+!packaging/
+!packaging/*
+**/__pycache__/
