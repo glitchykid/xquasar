@@ -6,11 +6,17 @@ XQuasar previews cleanup candidates in your Linux home directory. Each row shows
 
 ## Install on Linux Mint, Ubuntu or Debian
 
-[Download XQuasar (.deb)](https://github.com/glitchykid/xquasar/releases/latest/download/xquasar.deb)
+**xquasar.deb** · [Published versions](https://github.com/glitchykid/xquasar/releases)
 
 Open the downloaded file and click **Install**. Launch **XQuasar** from the applications menu. The package manager installs the desktop components. A distribution with Python 3.12 or newer is required.
 
 The window opens with a preview. Tick the items you want, choose **Clean selected…**, review the deletion and recovery counts, then confirm. **Open recovery folder** takes you to any app profiles moved by this cleanup.
+
+If you have a source checkout, create the installer with
+
+```sh
+sh packaging/build-deb.sh 0.2.0 ./xquasar.deb
+```
 
 ## Run the CLI from source
 

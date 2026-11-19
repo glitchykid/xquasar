@@ -6,11 +6,17 @@ XQuasar는 Linux 홈 디렉터리를 검사해 정리할 수 있는 항목을 �
 
 ## Linux Mint, Ubuntu, Debian에 설치
 
-[XQuasar 다운로드(.deb)](https://github.com/glitchykid/xquasar/releases/latest/download/xquasar.deb)
+**xquasar.deb** · [배포된 버전](https://github.com/glitchykid/xquasar/releases)
 
 다운로드한 파일을 열고 **설치**를 누르세요. 설치 후 애플리케이션 메뉴에서 **XQuasar**를 실행합니다. 패키지 관리자가 그래픽 화면에 필요한 구성 요소도 설치합니다. Python 3.12 이상을 제공하는 배포판이 필요합니다.
 
 처음에는 미리보기 목록이 열립니다. 항목에 체크하고 **선택 항목 정리…**를 누른 뒤 영구 삭제 개수와 복구 폴더로 이동할 개수를 확인하세요. 정리를 확정하고 앱 프로필이 이동되면 **복구 폴더 열기**에서 확인할 수 있습니다.
+
+소스에서 설치 파일을 만들려면 다음 명령을 실행하세요
+
+```sh
+sh packaging/build-deb.sh 0.2.0 ./xquasar.deb
+```
 
 ## 소스에서 CLI 실행
 
