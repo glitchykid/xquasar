@@ -6,7 +6,7 @@ XQuasar 会扫描 Linux 主目录，列出可以清理的项目。每行都会�
 
 ## 在 Linux Mint、Ubuntu 或 Debian 上安装
 
-**xquasar.deb** · [已发布版本](https://github.com/glitchykid/xquasar/releases)
+[下载 XQuasar（.deb）](https://github.com/glitchykid/xquasar/releases/latest/download/xquasar.deb) · [已发布版本](https://github.com/glitchykid/xquasar/releases)
 
 打开下载的文件，点击**安装**，然后在应用程序菜单中启动 **XQuasar**。包管理器会一并安装图形界面所需的组件。需要发行版提供 Python 3.12 或更高版本。
 

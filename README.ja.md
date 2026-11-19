@@ -6,7 +6,7 @@ XQuasar は Linux のホームディレクトリを調べ、整理できる項�
 
 ## Linux Mint・Ubuntu・Debian へのインストール
 
-**xquasar.deb** · [公開済みバージョン](https://github.com/glitchykid/xquasar/releases)
+[XQuasar をダウンロード（.deb）](https://github.com/glitchykid/xquasar/releases/latest/download/xquasar.deb) · [公開済みバージョン](https://github.com/glitchykid/xquasar/releases)
 
 ダウンロードしたファイルを開き、**インストール**を押します。アプリケーションメニューから **XQuasar** を起動してください。画面表示に必要なパッケージも一緒にインストールされます。Python 3.12 以降を提供するディストリビューションが必要です。
 

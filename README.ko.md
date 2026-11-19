@@ -6,7 +6,7 @@ XQuasar는 Linux 홈 디렉터리를 검사해 정리할 수 있는 항목을 �
 
 ## Linux Mint, Ubuntu, Debian에 설치
 
-**xquasar.deb** · [배포된 버전](https://github.com/glitchykid/xquasar/releases)
+[XQuasar 다운로드(.deb)](https://github.com/glitchykid/xquasar/releases/latest/download/xquasar.deb) · [배포된 버전](https://github.com/glitchykid/xquasar/releases)
 
 다운로드한 파일을 열고 **설치**를 누르세요. 설치 후 애플리케이션 메뉴에서 **XQuasar**를 실행합니다. 패키지 관리자가 그래픽 화면에 필요한 구성 요소도 설치합니다. Python 3.12 이상을 제공하는 배포판이 필요합니다.
 

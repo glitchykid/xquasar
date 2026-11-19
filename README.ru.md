@@ -6,7 +6,7 @@ XQuasar находит кандидатов на очистку в домашн�
 
 ## Установка на Linux Mint, Ubuntu или Debian
 
-**xquasar.deb** · [Опубликованные версии](https://github.com/glitchykid/xquasar/releases)
+[Скачать XQuasar (.deb)](https://github.com/glitchykid/xquasar/releases/latest/download/xquasar.deb) · [Опубликованные версии](https://github.com/glitchykid/xquasar/releases)
 
 Откройте скачанный файл и нажмите **Установить**. Затем выберите **XQuasar** в меню приложений. Менеджер пакетов установит компоненты для графического окна. Подходит дистрибутив с Python 3.12 или новее.
 
