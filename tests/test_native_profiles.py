@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from xquasar.native import SnapState
 from xquasar import activity, native
 from xquasar.cleaner import apply, open_home, scan
 
@@ -24,7 +25,7 @@ class NativeProfiles(unittest.TestCase):
         self.logs.mkdir()
         self.enterContext(patch.object(native, "APT_LOGS", self.logs))
         self.db = self.enterContext(patch.object(native, "dpkg_states", return_value=(set(), set())))
-        self.snaps = self.enterContext(patch.object(native, "snap_state", return_value=(set(), set())))
+        self.snaps = self.enterContext(patch.object(native, "snap_state", return_value=SnapState(set(), set(), set())))
         self.enterContext(patch.object(native, "available_command", return_value=False))
         self.enterContext(patch("xquasar.cleaner.installed_apps", return_value=set()))
         self.enterContext(patch.dict(os.environ, {
@@ -70,9 +71,9 @@ class NativeProfiles(unittest.TestCase):
         self.db.return_value = ({"qbittorrent-nox"}, set())
         self.assertFalse(apply(self.home, items)[0])
         self.db.return_value = (set(), set())
-        self.snaps.return_value = ({"qbittorrent_alt"}, set())
+        self.snaps.return_value = SnapState({"qbittorrent_alt"}, set(), set())
         self.assertFalse(scan(self.home)[0])
-        self.snaps.return_value = (set(), set())
+        self.snaps.return_value = SnapState(set(), set(), set())
         with patch("xquasar.cleaner.installed_apps", return_value={"org.qbittorrent.qBittorrent"}):
             self.assertFalse(scan(self.home)[0])
         self.assertTrue(profile.exists())
@@ -83,12 +84,12 @@ class NativeProfiles(unittest.TestCase):
         self.folder("snap/demo/common")
         self.folder("snap/notes/project")
         self.assertFalse(scan(self.home)[0])
-        self.snaps.return_value = ({"demo"}, {"demo_alt", "demo", "notes"})
+        self.snaps.return_value = SnapState({"demo"}, set(), {"demo_alt", "demo", "notes"})
         items, _ = scan(self.home)
         self.assertEqual({str(i.path) for i in items}, {"snap/demo_alt", ".snap/data/demo_alt"})
-        self.snaps.return_value = ({"demo_alt"}, {"demo_alt"})
+        self.snaps.return_value = SnapState({"demo_alt"}, set(), {"demo_alt"})
         self.assertFalse(apply(self.home, items)[0])
-        self.snaps.return_value = (set(), {"demo_alt"})
+        self.snaps.return_value = SnapState(set(), set(), {"demo_alt"})
         self.assertEqual(apply(self.home, items)[:2], (items, []))
 
     def test_real_process_using_profile_protects_directory_and_sibling_cache(self):
@@ -138,7 +139,7 @@ class NativeProfiles(unittest.TestCase):
         (self.logs / "history.log").write_text(
             "Start-Date: now\nRemove: mpv:amd64 (1.0)\nError: transaction failed\nEnd-Date: now\n")
         self.assertFalse(scan(self.home)[0])
-        self.snaps.return_value = (set(), {"mpv"})
+        self.snaps.return_value = SnapState(set(), set(), {"mpv"})
         self.assertEqual([i.kind for i in scan(self.home)[0]], ["snap"])
         self.snaps.side_effect = OSError("inventory unavailable")
         self.assertFalse(scan(self.home)[0])

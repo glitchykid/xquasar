@@ -2,11 +2,13 @@
 
 # Automatic cleanup and recovery
 
-1. The dark preview shows the total size of recognised cache files and the categories found on this scan. **All checks (22)** opens the rule catalog, including categories with zero matches.
+1. The dark preview shows the total size of recognised cache files and the categories found on this scan. **All checks (38)** opens the rule catalog, including categories with zero matches.
 2. Choose **Show paths** to inspect the candidates. **Clean up…** shows the number of cache files to delete and items to move before asking for confirmation.
 3. After cleanup, choose **Open recovery folder** to find a saved launcher or profile. To restore it, close the affected app and move the item back to its original path. If a replacement already exists, keep both copies and compare them first.
 
-**APT and Snap profiles** — For qBittorrent, VLC, mpv, Inkscape, Audacity and FileZilla, XQuasar knows the specific profile locations under `.config`, `.local`, `.cache` and older hidden directories. It checks completed APT transactions or dpkg’s residual-configuration state against the current inventory. For Snap, a recorded removal and the absence of all installed revisions identify an instance under `~/snap` or `~/.snap/data`. An expired history can leave old profiles unidentified.
+**Package profiles and KDE settings** — XQuasar recognises profile directories for 23 applications, including Blender, OBS Studio, GIMP, Transmission and Neovim. For 24 more KDE applications it checks individual settings files such as `.config/kcalcrc` and `.config/spectaclerc`. A profile move requires evidence of removal, a check for another installation and a fresh activity check. Settings and profiles go to recovery intact. It checks completed APT transactions or dpkg’s residual-configuration state against the current inventory. For Snap, a recorded removal and the absence of all installed revisions identify an instance under `~/snap` or `~/.snap/data`. An expired history can leave old profiles unidentified.
+
+**Desktop and development caches** — The 38 categories include Qt QML bytecode, darktable thumbnails, Thunderbird HTTP and startup caches, Chromium graphics entries, and caches for Go, Gradle, Electron, pip, RubyGems, Cabal, Helm, Composer and NuGet. XQuasar also checks recognised cache formats inside installed Flatpak and Snap apps. Offline builds may need to download packages again. Go outputs and Gradle archives are checked by digest up to 64 MiB per file.
 
 **Running applications** — XQuasar checks user processes during preview and again during cleanup. It skips profiles and caches it can associate with a running app, including Firefox HTTP cache. Close the app and scan again to include its cache. Confirmed leftover profiles move intact to recovery.
 

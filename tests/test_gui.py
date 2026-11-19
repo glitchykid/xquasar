@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from xquasar.native import SnapState
 try:
     import gi
     gi.require_version("Gtk", "3.0")
@@ -81,7 +82,7 @@ class DesktopFlow(unittest.TestCase):
         self.assertFalse(self.window.rows["cargo"].get_visible())
         self.window.all_rules.set_active(True)
         self.assertTrue(self.window.rows["cargo"].get_visible())
-        self.assertEqual(len(self.window.rows), 22)
+        self.assertEqual(len(self.window.rows), 38)
         self.window.all_rules.set_active(False)
         self.assertFalse(self.window.rows["cargo"].get_visible())
 
@@ -103,7 +104,7 @@ class DesktopFlow(unittest.TestCase):
         profile = self.home / "snap/test-xquasar/common"
         profile.mkdir(parents=True)
         (profile / "settings").write_text("keep")
-        with patch("xquasar.native.snap_state", return_value=(set(), {"test-xquasar"})):
+        with patch("xquasar.native.snap_state", return_value=SnapState(set(), set(), {"test-xquasar"})):
             self.window.rescan_button.clicked()
             self.idle()
             self.assertTrue(self.window.rows["snap"].get_visible())
@@ -112,6 +113,22 @@ class DesktopFlow(unittest.TestCase):
             self.assertFalse(profile.exists())
             saved, = (self.home / ".xquasar-recovery").glob("*/snap/test-xquasar/common/settings")
             self.assertEqual(saved.read_text(), "keep")
+
+    def test_kde_settings_have_a_separate_recoverable_row(self):
+        settings = self.home / ".config/kcalcrc"
+        settings.write_text("[Precision]\nDigits=12\n")
+        with (patch("xquasar.native.dpkg_states", return_value=(set(), {"kcalc"})),
+              patch("xquasar.native.apt_history", return_value=set()),
+              patch("xquasar.native.available_command", return_value=False),
+              patch("xquasar.native.snap_state", return_value=SnapState(set(), set(), set())),
+              patch("xquasar.cleaner.installed_apps", return_value=set())):
+            self.window.rescan_button.clicked()
+            self.idle()
+            self.assertTrue(self.window.rows["kconfig"].get_visible())
+            self.assertEqual(self.window.counts["kconfig"].get_text(), "1")
+            self.confirm(Gtk.ResponseType.OK)
+            saved, = (self.home / ".xquasar-recovery").glob("*/.config/kcalcrc")
+            self.assertEqual(saved.read_text(), "[Precision]\nDigits=12\n")
 
     def test_changed_item_and_rescan(self):
         self.cache.write_bytes(b"new content")

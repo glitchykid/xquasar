@@ -51,9 +51,9 @@ def main():
             for warning in warnings:
                 print(f"Skipped: {warning}", file=sys.stderr)
             for index, item in enumerate(items, 1):
-                action = {"browser": "delete browser cache", "bytecode": "delete Python cache",
+                action = {"browser": "delete browser cache", "browser_gpu": "delete browser graphics cache", "bytecode": "delete Python cache",
                           "launcher": "recoverable move", "fontconfig": "delete font cache", "thumbnail": "delete thumbnail",
-                          "apt": "recoverable move", "snap": "recoverable move",
+                          "kconfig": "recoverable move", "apt": "recoverable move", "snap": "recoverable move",
                           "manual": "recoverable move", "flatpak": "recoverable move"}.get(item.kind)
                 if item.kind in RULES:
                     action = "delete cache: " + RULES[item.kind].label

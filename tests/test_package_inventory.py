@@ -9,6 +9,7 @@ import threading
 import unittest
 from unittest.mock import patch
 
+from xquasar.native import SnapState
 from xquasar import activity, native
 from xquasar.cleaner import apply, open_home, scan
 
@@ -57,7 +58,7 @@ class Inventories(unittest.TestCase):
             thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.02})
             thread.start()
             try:
-                self.assertEqual(native.snap_state(), ({"pending", "retained"}, {"demo_test"}))
+                self.assertEqual(native.snap_state(), SnapState({"retained"}, {"pending"}, {"demo_test"}))
                 database["changes"].append({"ready": False, "status": "Doing", "kind": "install-snap"})
                 with self.assertRaises(OSError):
                     native.snap_state()

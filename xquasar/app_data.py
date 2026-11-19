@@ -13,7 +13,7 @@ BROWSER_ENTRY = re.compile(r"[0-9a-f]{16}_[01]")
 BROWSER_HEADER = (0xFCFB6D1BA7725C30).to_bytes(8, sys.byteorder)
 PYTHON_ENTRY = re.compile(r"(.+)\." + re.escape(sys.implementation.cache_tag) + r"(?:\.opt-[12])?\.pyc")
 PYTHON_HEADER = importlib.util.MAGIC_NUMBER
-PROFILE = re.compile(r"Default|Profile [0-9]+")
+PROFILE = re.compile(r"Default|Guest Profile|System Profile|Profile [0-9]+")
 SYSTEM_DIRS = {"Trash", "flatpak", "keyrings", "applications", "autostart", "icons", "fonts"}
 
 
@@ -35,18 +35,26 @@ def browser_cache_folders(home, roots, warnings):
             if name in SYSTEM_DIRS:
                 continue
             app = root / name
+            app_children = directories(home, app, warnings)
             bases = [app]
             if name == "BraveSoftware":
-                bases = [app / child for child in directories(home, app, warnings)
+                bases = [app / child for child in app_children
                          if child.startswith("Brave-Browser")]
+            if "QtWebEngine" in app_children:
+                bases.append(app / "QtWebEngine")
             for base in bases:
-                children = directories(home, base, warnings)
+                children = app_children if base == app else directories(home, base, warnings)
                 profiles = [base / child for child in children if PROFILE.fullmatch(child)]
-                if "Cache" in children or "Code Cache" in children:
+                if set(children) & {"Cache", "Code Cache", "Network", "GPUCache", "GrShaderCache", "DawnWebGPUCache", "DawnGraphiteCache"}:
                     profiles.append(base)
+                if "Partitions" in children:
+                    partitions = base / "Partitions"
+                    profiles.extend(partitions / child for child in directories(home, partitions, warnings))
                 for profile in profiles:
-                    for suffix in ("Cache/Cache_Data", "Code Cache/js", "Code Cache/wasm"):
+                    for suffix in ("Cache/Cache_Data", "Code Cache/js", "Code Cache/wasm", "Network/Cache/Cache_Data"):
                         yield profile / suffix, "browser", BROWSER_ENTRY
+                    for suffix in ("GPUCache", "GrShaderCache", "DawnWebGPUCache", "DawnGraphiteCache"):
+                        yield profile / suffix, "browser_gpu", BROWSER_ENTRY
 
 
 def python_cache_folders(home, warnings):

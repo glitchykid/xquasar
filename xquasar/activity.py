@@ -5,7 +5,8 @@ import os
 from pathlib import Path
 import re
 
-from .native import PROFILES
+from . import catalog
+from .native import KCONFIG_FILES, PROFILES, app_names
 
 
 PROC = Path("/proc")
@@ -14,8 +15,9 @@ ALIASES = (
     {"chrome", "google-chrome", "google-chrome-stable", "com.google.Chrome"},
     {"chromium", "chromium-browser", "org.chromium.Chromium"},
     {"brave", "brave-browser", "BraveSoftware", "com.brave.Browser"},
-    *({*names, flatpak, *(Path(template).name for template in templates)}
+    *({*app_names(names), flatpak, *(Path(template).name for template in templates)}
       for names, flatpak, templates in PROFILES),
+    *({*app_names((pkg,)), "org.kde." + pkg.removeprefix("kde-"), file} for pkg, file in KCONFIG_FILES.items()),
     {"bitwarden", "bitwarden-app", "com.bitwarden.desktop"},
     {"Code", "code-oss", "com.visualstudio.code"}, {"npm", "npm-cli.js", "npx", "npx-cli.js"},
     {"nuget", "dotnet"}, {"go", "go-build"}, {"gstreamer", "gstreamer-1.0", "gst-launch-1.0"},
@@ -66,17 +68,25 @@ class Activity:
                 self.names.add(identity(parts[0]))
 
     def busy(self, item):
-        app = item.flatpak_id or owner(item.path, self.roots)
+        return self.using(item.kind, item.path, item.flatpak_id, item.path.parent if item.is_cache else None)
+
+    def using(self, kind, path, flatpak_id, cache_folder):
+        app = flatpak_id or owner(path, self.roots)
         names = {identity(app)}
-        if item.flatpak_id:
+        if flatpak_id or path.is_relative_to(Path(".var/app")):
             names.add(identity(app.rsplit(".", 1)[-1]))
-        if item.kind.startswith("firefox_"):
+        if kind.startswith("thunderbird_"):
+            names.add(identity("thunderbird"))
+        if kind == "qml" and cache_folder is not None:
+            names.add(identity(cache_folder.parent.name))
+        if kind.startswith("firefox_"):
             names.add(identity("firefox"))
-        if "_" in app and item.path.parts[0] in ("snap", ".snap"):
+        if "_" in app and path.parts[0] in ("snap", ".snap"):
             names.add(identity(app.split("_")[0]))
-        if item.is_cache:
-            names.add(identity(item.kind))
-        return bool(self.names & names or item.path in self.paths)
+        if cache_folder is not None:
+            names.add(identity(kind))
+            names.update(identity(n) for n in catalog.TOOL_PROCESSES.get(kind, ()))
+        return bool(self.names & names or path in self.paths)
 
 
 def read_process(pid, state):
@@ -95,6 +105,10 @@ def read_process(pid, state):
     if args and args[0]:
         state.names.add(identity(os.path.basename(args[0])))
         for arg in args[1:]:
+            if arg.startswith("org.gradle.") or arg.endswith(("/gradle", "/gradlew")):
+                state.names.add(identity("gradle"))
+            if arg in ("pip", "pip.__main__"):
+                state.names.add(identity("pip"))
             if arg.startswith(("--user-data-dir=", "--profile=")):
                 state.reference(arg.partition("=")[2])
             elif arg.startswith("/"):

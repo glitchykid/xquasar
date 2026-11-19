@@ -10,17 +10,18 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import GdkPixbuf, GLib, Gtk, Pango
 
 from .appearance import draw_quasar, load_theme, styled
-from .catalog import RULES
+from .catalog import DOWNLOADS, RULES
 from .cleaner import apply, open_home, scan
 from .gui_text import translate as tr
 
 
 GROUPS = {"thumbnail": "Thumbnail cache", "fontconfig": "Font cache",
-          "browser": "Browser and Electron cache", "bytecode": "Python bytecode",
+          "browser": "Browser and Electron cache", "browser_gpu": "Browser graphics cache", "bytecode": "Python bytecode",
           "flatpak": "Uninstalled Flatpak profiles", "launcher": "Obsolete Flatpak launchers",
+          "kconfig": "Removed KDE application settings",
           "apt": "Removed APT profiles", "snap": "Removed Snap profiles",
           **{key: rule.label for key, rule in RULES.items()}}
-RECOVERABLE = {"flatpak", "launcher", "apt", "snap"}
+RECOVERABLE = {"flatpak", "launcher", "apt", "snap", "kconfig"}
 
 
 def label(value, style):
@@ -30,7 +31,7 @@ def label(value, style):
 def group_icon(kind):
     if kind in RECOVERABLE:
         return "folder-download-symbolic"
-    if kind == "browser" or kind.startswith("firefox_"):
+    if kind in {"browser", "browser_gpu"} or kind.startswith(("firefox_", "thunderbird_")):
         return "web-browser-symbolic"
     if kind in {"thumbnail", "failed_thumbnail", "matplotlib", "fontconfig", "gstreamer"}:
         return "image-x-generic-symbolic"
@@ -253,10 +254,10 @@ class CleanerWindow(Gtk.Window):
                                    text=tr("Apply this cleanup plan?"))
         styled(dialog, "quasar")
         summary = [tr("Delete cache files: {n}", n=cached),
-                   tr("Move to recovery (profiles and launchers): {n}", n=len(self.plan) - cached)]
+                   tr("Move to recovery: {n}", n=len(self.plan) - cached)]
         if any(item.kind in {"browser", "bytecode"} for item in self.plan):
             summary.append(tr("Browser and Python cache folders emptied by this cleanup are removed."))
-        if any(item.kind in {"pip", "cargo", "nuget", "npm", "composer"} for item in self.plan):
+        if any(item.kind in DOWNLOADS for item in self.plan):
             summary.append(tr("Package managers may need to download these archives again."))
         dialog.format_secondary_text("\n".join(summary))
         dialog.add_buttons(tr("Cancel"), Gtk.ResponseType.CANCEL, tr("Clean"), Gtk.ResponseType.OK)
