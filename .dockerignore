@@ -1,0 +1,6 @@
+**
+!Dockerfile
+!xquasar/
+!xquasar/*.py
+!tests/
+!tests/*.py
