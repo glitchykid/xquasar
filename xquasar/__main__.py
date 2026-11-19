@@ -7,8 +7,10 @@ from .cleaner import apply, manual_path, open_home, scan
 
 def choose(items):
     try:
-        choice = input("Items to clean (space-separated numbers, 'all', or Enter to cancel): ")
-        if not choice.strip():
+        choice = input(f"Clean the {len(items)} listed item(s)? Type yes to confirm, or Enter to cancel: ")
+        if choice.strip() == "yes":
+            return items
+        if choice.strip() in {"", "no"}:
             return []
         if choice.strip() == "all":
             selected = items
@@ -27,7 +29,7 @@ def choose(items):
 def main():
     parser = argparse.ArgumentParser(prog="xquasar", description="Preview Linux home cleanup.")
     mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--clean", action="store_true", help="select items and confirm cleanup")
+    mode.add_argument("--clean", action="store_true", help="confirm the automatic cleanup plan")
     mode.add_argument("--gui", action="store_true", help="open the desktop cleanup window")
     parser.add_argument("--leftover", action="append", default=[], metavar="APP_DIR",
                         help="include a home-relative app directory, e.g. .config/OldEditor")
@@ -40,13 +42,15 @@ def main():
             except (ImportError, ValueError):
                 parser.exit(2, "XQuasar GUI requires GTK 3 and PyGObject. On Mint or Ubuntu install "
                             "python3-gi and gir1.2-gtk-3.0, or use the XQuasar .deb package.\n")
-            return run(manual)
+            if manual:
+                parser.error("--leftover is an explicit terminal option; the desktop plan is automatic")
+            return run()
         with open_home(Path.home()) as home:
             items, warnings = scan(home, manual)
             for warning in warnings:
                 print(f"Skipped: {warning}", file=sys.stderr)
             for index, item in enumerate(items, 1):
-                action = {"empty": "remove empty folder", "thumbnail": "delete thumbnail",
+                action = {"fontconfig": "delete font cache", "thumbnail": "delete thumbnail",
                           "manual": "recoverable move", "flatpak": "recoverable move"}[item.kind]
                 print(f"{index:4}  {item.kind:9}  {str(item.path)!r}  ({action})")
             if not items:
@@ -64,7 +68,7 @@ def main():
                 else:
                     print("Cancelled.")
             else:
-                print(f"Preview: {len(items)} item(s). Run with --clean to select and confirm.")
+                print(f"Preview: {len(items)} item(s). Run with --clean to confirm the plan.")
             return int(bool(warnings))
     except (OSError, ValueError) as exc:
         print(f"xquasar: {exc}", file=sys.stderr)

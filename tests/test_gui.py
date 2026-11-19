@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 import tempfile
 import unittest
@@ -29,6 +30,10 @@ class DesktopFlow(unittest.TestCase):
         self.app = self.home / ".config/OldEditor"
         self.app.mkdir(parents=True)
         (self.app / "profile").write_text("keep")
+        normal = self.home / ".cache/thumbnails/normal"
+        normal.mkdir(parents=True)
+        self.cache = normal / ("f" * 32 + ".png")
+        self.cache.write_bytes(b"\x89PNG\r\n\x1a\n" + bytes(32))
         self.window = CleanerWindow(self.home)
         self.addCleanup(self.window.destroy)
         self.idle()
@@ -48,10 +53,6 @@ class DesktopFlow(unittest.TestCase):
             self.fail("Window stayed busy")
         GLib.source_remove(timeout)
 
-    def select(self, path):
-        index = next(i for i, row in enumerate(self.window.model) if row[1] == path)
-        self.window.toggle.emit("toggled", str(index))
-
     def confirm(self, response):
         def answer():
             for dialog in Gtk.Window.list_toplevels():
@@ -63,41 +64,43 @@ class DesktopFlow(unittest.TestCase):
         self.window.clean_button.clicked()
         self.idle()
 
-    def test_preview_selection_cancel_and_confirm(self):
-        self.assertTrue(self.empty.exists())
-        self.assertFalse(self.window.clean_button.get_sensitive())
-        self.select("work")
+    def test_no_folder_selection_and_cancel_then_confirm(self):
+        self.assertTrue(self.cache.exists())
         self.assertTrue(self.window.clean_button.get_sensitive())
         self.confirm(Gtk.ResponseType.CANCEL)
-        self.assertTrue(self.empty.exists())
+        self.assertTrue(self.cache.exists())
         self.confirm(Gtk.ResponseType.OK)
-        self.assertFalse(self.empty.exists())
+        self.assertFalse(self.cache.exists())
+        self.assertTrue(self.empty.is_dir())
+        self.assertEqual((self.app / "profile").read_text(), "keep")
         self.assertFalse(self.window.clean_button.get_sensitive())
-        self.assertIn("1", self.window.status.get_text())
 
-    def test_manual_folder_and_recovery(self):
-        self.window.include_folder(self.app)
+    @unittest.skipUnless(shutil.which("flatpak"), "Flatpak CLI unavailable")
+    def test_auto_detected_profile_moves_to_recovery(self):
+        profile = self.home / ".var/app/org.example.XQuasarDesktopFixture"
+        profile.mkdir(parents=True)
+        (profile / "settings").write_text("saved")
+        self.window.rescan_button.clicked()
         self.idle()
-        self.select(".config/OldEditor")
+        self.assertTrue(self.window.clean_button.get_sensitive())
         self.confirm(Gtk.ResponseType.OK)
-        recovered, = (self.home / ".xquasar-recovery").glob("*/.config/OldEditor/profile")
-        self.assertEqual(recovered.read_text(), "keep")
-        self.assertTrue(self.empty.exists())
+        saved, = (self.home / ".xquasar-recovery").glob("*/.var/app/" + profile.name + "/settings")
+        self.assertEqual(saved.read_text(), "saved")
         self.assertTrue(self.window.recovery_button.get_visible())
+        self.assertTrue(self.app.exists())
 
-    def test_changed_item_and_partial_scan(self):
-        self.select("work")
-        (self.empty / "new").touch()
+    def test_changed_item_and_rescan(self):
+        self.cache.write_bytes(b"new content")
+        self.assertTrue(self.window.clean_button.get_sensitive())
         self.confirm(Gtk.ResponseType.OK)
-        self.assertTrue((self.empty / "new").exists())
+        self.assertTrue(self.cache.exists())
         self.assertTrue(self.window.details.get_visible())
         self.window.rescan_button.clicked()
         self.idle()
-        self.assertEqual(len(self.window.model), 0)
         self.assertFalse(self.window.clean_button.get_sensitive())
 
     def test_incomplete_scan_offers_retry(self):
-        self.empty.rmdir()
+        self.cache.unlink()
         (self.home / ".var/app/org.example.Unknown").mkdir(parents=True)
         with patch.dict(os.environ, {"PATH": ""}):
             self.window.rescan_button.clicked()

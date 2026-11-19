@@ -14,12 +14,12 @@ DIRECTORY = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 RECOVERY = Path(".xquasar-recovery")
 APP_DATA = Path(".var/app")
 MANUAL_ROOTS = {Path(p) for p in (".config", ".cache", ".local/share", ".local/state")}
-SHARED = {Path(p) for p in (".cache/thumbnails", ".local/share/flatpak",
+SHARED = {Path(p) for p in (".cache/thumbnails", ".cache/fontconfig", ".local/share/flatpak",
                             ".local/share/Trash", ".local/share/keyrings")}
-USER_DIRS = {"Desktop", "Documents", "Downloads", "Music", "Pictures", "Public",
-             "Templates", "Videos"}
 APP_ID = re.compile(r"(?:[A-Za-z_][A-Za-z_0-9]*\.){2,}[A-Za-z_][A-Za-z_0-9-]*")
 THUMBNAIL = re.compile(r"[a-f0-9]{32}\.png")
+FONT_CACHE = re.compile(r"[a-f0-9]{32}-(le|be)(?:32|64)\.cache-([1-9][0-9]{0,2})")
+PNG_HEADER = b"\x89PNG\r\n\x1a\n"
 
 
 def manual_path(value):
@@ -94,10 +94,15 @@ class Candidate:
     kind: str
     path: Path
     identity: tuple
+    size: int
+
+    @property
+    def is_cache(self):
+        return self.kind in {"thumbnail", "fontconfig"}
 
     @classmethod
     def from_stat(cls, kind, path, info):
-        return cls(kind, path, (info.st_dev, info.st_ino, info.st_ctime_ns))
+        return cls(kind, path, (info.st_dev, info.st_ino, info.st_ctime_ns), info.st_size)
 
 
 def installed_apps():
@@ -124,86 +129,48 @@ def xdg_relative(home, setting, default):
     return value.relative_to(home.path)
 
 
-def protected_dirs(home):
-    protected = {Path(name) for name in USER_DIRS}
-    config = xdg_relative(home, "XDG_CONFIG_HOME", ".config")
-    if config is None:
-        # Locations may be customized in an external config file.
-        raise OSError("XDG_CONFIG_HOME is outside home")
+def identify_cache(home, parent, folder, entry, kind, pattern):
+    match = pattern.fullmatch(entry.name)
+    if not match or not entry.is_file(follow_symlinks=False):
+        return None
+    header = PNG_HEADER
+    if kind == "fontconfig":
+        order = "little" if match[1] == "le" else "big"
+        header = (0xFC02FC04).to_bytes(4, order) + int(match[2]).to_bytes(4, order)
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+    fd = os.open(entry.name, flags, dir_fd=parent)
     try:
-        with home.directory(config) as fd:
-            flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
-            source = os.open("user-dirs.dirs", flags, dir_fd=fd)
-            with os.fdopen(source, encoding="utf-8", errors="surrogateescape") as file:
-                if not stat.S_ISREG(os.fstat(source).st_mode):
-                    raise OSError("invalid user-dirs.dirs")
-                for line in file:
-                    line = line.strip()
-                    if not line or line.startswith("#"):
-                        continue
-                    match = re.fullmatch(r'XDG_\w+_DIR="((?:[^"\\]|\\.)*)"\s*(?:#.*)?', line)
-                    if not match:
-                        raise OSError("unrecognized user-dirs.dirs assignment")
-                    value = re.sub(r'\\(["\\$`])', r'\1', match[1])
-                    if value == "$HOME" or value.startswith("$HOME/"):
-                        value = str(home.path) + value[len("$HOME"):]
-                    path = Path(os.path.normpath(value))
-                    if not path.is_absolute():
-                        raise OSError("unrecognized path in user-dirs.dirs")
-                    if path.is_relative_to(home.path):
-                        protected.add(path.relative_to(home.path))
-    except FileNotFoundError:
-        pass
-    return protected
+        info = os.fstat(fd)
+        if stat.S_ISREG(info.st_mode) and mount_id(fd) == home.mount and os.read(fd, len(header)) == header:
+            return Candidate.from_stat(kind, folder / entry.name, info)
+    finally:
+        os.close(fd)
+    return None
 
 
-def empty_dirs(home, found, warnings):
-    protected = protected_dirs(home)
-    app_roots = {
-        xdg_relative(home, variable, default) for variable, default in (
-            ("XDG_CACHE_HOME", ".cache"), ("XDG_CONFIG_HOME", ".config"),
-            ("XDG_DATA_HOME", ".local/share"), ("XDG_STATE_HOME", ".local/state"),
-        )
-    }
-    pending = [Path(".")]
-    while pending:
-        path = pending.pop()
-        if path in app_roots:
-            continue
-        try:
-            with home.directory(path) as fd, os.scandir(fd) as entries:
-                empty = True
-                children = []
-                for entry in entries:
-                    empty = False
-                    if entry.name == ".git":
-                        children.clear()
-                        break
-                    if not entry.name.startswith(".") and entry.is_dir(follow_symlinks=False):
-                        children.append(path / entry.name)
-                if empty and path.parts and path not in protected:
-                    found.append(Candidate.from_stat("empty", path, os.fstat(fd)))
-                pending.extend(children)
-        except (BoundaryError, FileNotFoundError, NotADirectoryError):
-            continue
-        except OSError as exc:
-            warnings.append(f"{str(path)!r}: {exc}")
-
-
-def thumbnail_files(home, found):
+def cache_files(home, found, warnings):
     cache = xdg_relative(home, "XDG_CACHE_HOME", ".cache")
-    if cache is None:
+    if cache is None or cache.is_relative_to(RECOVERY):
         return
-    for size in ("normal", "large", "x-large", "xx-large"):
-        path = cache / "thumbnails" / size
+    folders = [(cache / "thumbnails" / size, "thumbnail", THUMBNAIL)
+               for size in ("normal", "large", "x-large", "xx-large")]
+    folders.append((cache / "fontconfig", "fontconfig", FONT_CACHE))
+    for folder, kind, pattern in folders:
         try:
-            with home.directory(path) as fd, os.scandir(fd) as entries:
+            with home.directory(folder) as parent, os.scandir(parent) as entries:
                 for entry in entries:
-                    if THUMBNAIL.fullmatch(entry.name) and entry.is_file(follow_symlinks=False):
-                        info = entry.stat(follow_symlinks=False)
-                        found.append(Candidate.from_stat("thumbnail", path / entry.name, info))
+                    try:
+                        item = identify_cache(home, parent, folder, entry, kind, pattern)
+                        if item:
+                            found.append(item)
+                    except FileNotFoundError:
+                        continue
+                    except OSError as exc:
+                        warnings.append(f"{str(folder / entry.name)!r}: {exc}")
         except FileNotFoundError:
             continue
+        except OSError as exc:
+            warnings.append(f"{str(folder)!r}: {exc}")
 
 
 def orphan_dirs(home, found):
@@ -221,24 +188,22 @@ def orphan_dirs(home, found):
                 found.append(Candidate.from_stat("flatpak", path, os.fstat(fd)))
 
 
-def scan(home, manual):
+def scan(home, manual=()):
     found, warnings = [], []
-    for rule in (thumbnail_files, orphan_dirs):
-        try:
-            rule(home, found)
-        except OSError as exc:
-            warnings.append(f"{rule.__name__}: {exc}")
+    cache_files(home, found, warnings)
     try:
-        empty_dirs(home, found, warnings)
+        orphan_dirs(home, found)
     except OSError as exc:
-        warnings.append(f"empty folders: {exc}")
+        warnings.append(f"Flatpak: {exc}")
     for path in set(manual):
         try:
             with home.directory(path) as fd:
                 found.append(Candidate.from_stat("manual", path, os.fstat(fd)))
         except OSError as exc:
             warnings.append(f"{str(path)!r}: {exc}")
-    return sorted(found, key=lambda item: item.path), warnings
+    moved_dirs = {item.path for item in found if not item.is_cache}
+    plan = [item for item in found if moved_dirs.isdisjoint(item.path.parents)]
+    return sorted(plan, key=lambda item: item.path), warnings
 
 
 def apply(home, selected):
@@ -257,15 +222,15 @@ def apply(home, selected):
                 info = os.stat(path.name, dir_fd=parent, follow_symlinks=False)
                 if Candidate.from_stat(item.kind, path, info) != item:
                     raise OSError("changed since preview")
-                if item.kind == "empty":
-                    os.rmdir(path.name, dir_fd=parent)
-                elif item.kind == "thumbnail":
+                if item.is_cache:
                     os.unlink(path.name, dir_fd=parent)
-                else:
+                elif item.kind in {"manual", "flatpak"}:
                     if item.kind == "flatpak" and (installed is None or path.name in installed):
                         raise OSError("Flatpak removal could not be confirmed")
                     with home.directory(session / path.parent, private=True, create=True) as dest:
                         os.rename(path.name, path.name, src_dir_fd=parent, dst_dir_fd=dest)
+                else:
+                    raise OSError("unrecognized cleanup rule")
             completed.append(item)
         except OSError as exc:
             warnings.append(f"{str(path)!r}: {exc}")

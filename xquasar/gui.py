@@ -1,4 +1,4 @@
-"""Native Linux desktop interface. GTK is optional for CLI users."""
+"""GTK preview of the automatic cleanup plan."""
 
 from pathlib import Path
 import threading
@@ -8,16 +8,12 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk, Pango
 
-from .cleaner import apply, manual_path, open_home, scan
+from .cleaner import apply, open_home, scan
 from .gui_text import translate as tr
 
 
-ACTIONS = {
-    "empty": "Remove empty folder",
-    "thumbnail": "Delete thumbnail",
-    "flatpak": "Move Flatpak data to recovery",
-    "manual": "Move app data to recovery",
-}
+GROUPS = {"thumbnail": "Thumbnail cache", "fontconfig": "Font cache",
+          "flatpak": "Uninstalled Flatpak profiles"}
 
 
 def button(label, callback):
@@ -26,116 +22,104 @@ def button(label, callback):
     return widget
 
 
+def text_panel(label):
+    panel = Gtk.Expander(label=tr(label))
+    view = Gtk.TextView(editable=False, cursor_visible=False, wrap_mode=Gtk.WrapMode.WORD_CHAR)
+    scroll = Gtk.ScrolledWindow(min_content_height=85, shadow_type=Gtk.ShadowType.IN)
+    scroll.add(view)
+    panel.add(scroll)
+    return panel, view.get_buffer()
+
+
 class CleanerWindow(Gtk.Window):
-    def __init__(self, path, manual=()):
+    def __init__(self, path):
         super().__init__(title="XQuasar")
         self.home_path = path
-        self.manual = set(manual)
-        self.busy = False
-        self.applying = False
-        self.closed = False
+        self.plan = []
+        self.scan_warnings = []
+        self.busy = self.applying = self.closed = False
         self.recovery = None
-        self.selected_count = 0
-        self.set_default_size(790, 460)
+        self.set_default_size(610, 300)
         self.set_icon_name("edit-clear")
         self.connect("destroy", lambda *_: setattr(self, "closed", True))
         self.connect("delete-event", lambda *_: self.applying)
 
-        header = Gtk.HeaderBar(title="XQuasar", subtitle=tr("Home cleanup"), show_close_button=True)
+        header = Gtk.HeaderBar(title="XQuasar", subtitle=tr("Automatic home cleanup"), show_close_button=True)
         self.set_titlebar(header)
         self.rescan_button = button("Scan again", self.refresh)
         header.pack_start(self.rescan_button)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, border_width=12)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, border_width=14)
         self.add(box)
-        toolbar = Gtk.Box(spacing=8)
-        box.pack_start(toolbar, False, False, 0)
         location = Gtk.Label(label=str(path), xalign=0, ellipsize=Pango.EllipsizeMode.MIDDLE)
         location.set_tooltip_text(str(path))
-        toolbar.pack_start(location, True, True, 0)
-        self.add_button = button("Add app folder…", self.pick_folder)
-        toolbar.pack_end(self.add_button, False, False, 0)
+        box.pack_start(location, False, False, 0)
+        grid = Gtk.Grid(row_spacing=8, column_spacing=20, border_width=10)
+        frame = Gtk.Frame()
+        frame.add(grid)
+        box.pack_start(frame, False, False, 0)
+        self.counts = {}
+        for row, (kind, name) in enumerate(GROUPS.items()):
+            grid.attach(Gtk.Label(label=tr(name), xalign=0, hexpand=True), 0, row, 1, 1)
+            count = Gtk.Label(label="—", xalign=1)
+            grid.attach(count, 1, row, 1, 1)
+            self.counts[kind] = count
+        box.pack_start(Gtk.Label(label=tr("Personal folders are kept."), xalign=0), False, False, 0)
 
-        self.model = Gtk.ListStore(bool, str, str, object)
-        self.view = Gtk.TreeView(model=self.model)
-        self.view.set_search_column(1)
-        self.view.set_tooltip_column(1)
-        self.toggle = Gtk.CellRendererToggle()
-        self.toggle.connect("toggled", self.toggle_row)
-        check = Gtk.TreeViewColumn(tr("Select"), self.toggle, active=0)
-        self.view.append_column(check)
-        for index, title in [(1, "Path in home"), (2, "Action")]:
-            cell = Gtk.CellRendererText()
-            column = Gtk.TreeViewColumn(tr(title), cell, text=index)
-            if index == 1:
-                cell.set_property("ellipsize", Pango.EllipsizeMode.MIDDLE)
-                column.set_expand(True)
-                column.set_min_width(120)
-            self.view.append_column(column)
-        self.view.connect("row-activated", lambda _, row, col: self.toggle_row(None, row)
-                          if col != check else None)
-        scroll = Gtk.ScrolledWindow(shadow_type=Gtk.ShadowType.IN)
-        scroll.add(self.view)
-        box.pack_start(scroll, True, True, 0)
-
-        self.details = Gtk.Expander(label=tr("Some items were skipped"))
-        self.detail_text = Gtk.TextView(editable=False, cursor_visible=False,
-                                        wrap_mode=Gtk.WrapMode.WORD_CHAR)
-        detail_scroll = Gtk.ScrolledWindow(min_content_height=64)
-        detail_scroll.add(self.detail_text)
-        self.details.add(detail_scroll)
+        self.paths, self.path_text = text_panel("Show paths")
+        self.paths.connect("notify::expanded", self.show_paths)
+        box.pack_start(self.paths, False, False, 0)
+        self.details, self.detail_text = text_panel("Some items were skipped")
         box.pack_start(self.details, False, False, 0)
 
         footer = Gtk.Box(spacing=8)
-        box.pack_start(footer, False, False, 0)
-        self.all_button = button("Select all", self.toggle_all)
-        footer.pack_start(self.all_button, False, False, 0)
+        box.pack_end(footer, False, False, 0)
         self.spinner = Gtk.Spinner()
         footer.pack_start(self.spinner, False, False, 0)
         self.status = Gtk.Label(xalign=0, wrap=True)
         footer.pack_start(self.status, True, True, 0)
         self.recovery_button = button("Open recovery folder", self.open_recovery)
         footer.pack_start(self.recovery_button, False, False, 0)
-        self.clean_button = button("Clean selected…", self.clean)
+        self.clean_button = button("Clean up…", self.clean)
         self.clean_button.get_style_context().add_class("suggested-action")
         footer.pack_end(self.clean_button, False, False, 0)
         self.show_all()
-        self.details.hide()
         self.recovery_button.hide()
         self.refresh()
 
     def update_buttons(self):
-        for control in (self.add_button, self.rescan_button, self.view):
-            control.set_sensitive(not self.busy)
-        self.all_button.set_sensitive(bool(len(self.model)) and not self.busy)
-        self.clean_button.set_sensitive(self.selected_count > 0 and not self.busy)
-        self.all_button.set_label(tr("Clear selection" if self.selected_count else "Select all"))
+        self.rescan_button.set_sensitive(not self.busy)
+        self.clean_button.set_sensitive(bool(self.plan) and not self.busy)
 
-    def selection_status(self):
-        self.update_buttons()
-        self.status.set_text(tr("Found {n} · Selected {s}", n=len(self.model), s=self.selected_count)
-                             if len(self.model) else tr("Nothing to clean"))
+    def show_plan(self, items):
+        self.plan = items
+        totals = {kind: [0, 0] for kind in GROUPS}
+        for item in items:
+            totals[item.kind][0] += 1
+            totals[item.kind][1] += item.size
+        for kind, (count, size) in totals.items():
+            value = str(count)
+            if kind != "flatpak" and count:
+                value += " · " + GLib.format_size(size)
+            self.counts[kind].set_text(value)
+        self.paths.set_visible(bool(items))
+        self.show_paths()
 
-    def toggle_row(self, _, path):
-        if not self.busy:
-            row = self.model[path]
-            row[0] = not row[0]
-            self.selected_count += 1 if row[0] else -1
-            self.selection_status()
-
-    def toggle_all(self, *_):
-        select = self.selected_count == 0
-        for row in self.model:
-            row[0] = select
-        self.selected_count = len(self.model) if select else 0
-        self.selection_status()
+    def show_paths(self, *_):
+        if not self.paths.get_expanded():
+            return
+        # Keep the optional preview responsive even with a very large cache.
+        visible = self.plan[:200]
+        lines = [repr(str(item.path))[1:-1] for item in visible]
+        if len(visible) < len(self.plan):
+            lines.insert(0, tr("Showing {n} of {total} paths", n=len(visible), total=len(self.plan)))
+        self.path_text.set_text("\n".join(lines))
 
     def warnings(self, messages):
         self.details.set_visible(bool(messages))
-        self.details.set_expanded(False)
-        self.detail_text.get_buffer().set_text("\n".join(messages).encode("utf-8", "backslashreplace").decode())
+        self.detail_text.set_text("\n".join(messages).encode("utf-8", "backslashreplace").decode())
 
-    def run_job(self, operation, args, finish, status):
+    def run_job(self, operation, finish, status, *args):
         self.busy = True
         self.status.set_text(tr(status))
         self.spinner.start()
@@ -149,6 +133,7 @@ class CleanerWindow(Gtk.Window):
             if error is None:
                 finish(*result)
             else:
+                self.show_plan([])
                 self.status.set_text(tr("Could not complete the operation"))
                 self.warnings([error])
             self.update_buttons()
@@ -157,7 +142,7 @@ class CleanerWindow(Gtk.Window):
         def work():
             try:
                 with open_home(self.home_path) as home:
-                    result = operation(home, args)
+                    result = operation(home, *args)
             except (OSError, ValueError) as exc:
                 GLib.idle_add(deliver, None, str(exc))
             else:
@@ -166,70 +151,44 @@ class CleanerWindow(Gtk.Window):
         threading.Thread(target=work, daemon=not self.applying).start()
 
     def refresh(self, *_):
-        self.model.clear()
-        self.selected_count = 0
+        self.show_plan([])
+        for count in self.counts.values():
+            count.set_text("—")
+        self.scan_warnings = []
         self.warnings([])
-        self.run_job(scan, tuple(self.manual), self.show_items, "Scanning…")
+        self.run_job(scan, self.scanned, "Scanning…")
 
-    def show_items(self, items, warnings):
-        self.view.set_model(None)
-        for item in items:
-            self.model.append((False, repr(str(item.path))[1:-1], tr(ACTIONS[item.kind]), item))
-        self.view.set_model(self.model)
-        self.selection_status()
+    def scanned(self, items, warnings):
+        self.show_plan(items)
+        self.scan_warnings = warnings
         self.warnings(warnings)
-        if warnings and not items:
-            self.status.set_text(tr("Scan incomplete"))
-
-    def pick_folder(self, *_):
-        dialog = Gtk.FileChooserDialog(title=tr("Add app folder…"), transient_for=self, modal=True,
-                                       action=Gtk.FileChooserAction.SELECT_FOLDER)
-        dialog.add_buttons(tr("Cancel"), Gtk.ResponseType.CANCEL, tr("Add"), Gtk.ResponseType.OK)
-        dialog.set_show_hidden(True)
-        dialog.set_current_folder(str(self.home_path))
-        path = dialog.get_filename() if dialog.run() == Gtk.ResponseType.OK else None
-        dialog.destroy()
-        if path:
-            self.include_folder(Path(path))
-
-    def include_folder(self, path):
-        try:
-            self.manual.add(manual_path(path.relative_to(self.home_path)))
-        except ValueError:
-            self.warnings([tr("Choose an app folder directly inside .config, .cache, .local/share or .local/state.")])
-            self.details.set_expanded(True)
-            return
-        self.refresh()
+        if items:
+            self.status.set_text(tr("Ready to clean: {n}", n=len(items)))
+        else:
+            self.status.set_text(tr("Scan incomplete" if warnings else "Nothing to clean"))
 
     def clean(self, *_):
-        selected = [row[3] for row in self.model if row[0]]
-        if not selected or self.busy:
+        if not self.plan or self.busy:
             return
-        permanent = sum(item.kind in {"empty", "thumbnail"} for item in selected)
+        cached = sum(item.is_cache for item in self.plan)
         dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
-                                   text=tr("Clean the selected items?"))
-        dialog.format_secondary_text(tr("Permanently delete: {n}", n=permanent) + "\n" +
-                                     tr("Move to recovery: {n}", n=len(selected) - permanent))
+                                   text=tr("Apply this cleanup plan?"))
+        dialog.format_secondary_text(tr("Delete cache files: {n}", n=cached) + "\n" +
+                                     tr("Move profiles to recovery: {n}", n=len(self.plan) - cached))
         dialog.add_buttons(tr("Cancel"), Gtk.ResponseType.CANCEL, tr("Clean"), Gtk.ResponseType.OK)
         dialog.set_default_response(Gtk.ResponseType.CANCEL)
         confirmed = dialog.run() == Gtk.ResponseType.OK
         dialog.destroy()
         if confirmed:
             self.applying = True
-            self.run_job(apply, selected, self.cleaned, "Cleaning…")
+            self.run_job(apply, self.cleaned, "Cleaning…", tuple(self.plan))
 
     def cleaned(self, done, failures, session):
-        completed = set(done)
-        for item in done:
-            if item.kind == "manual":
-                self.manual.discard(item.path)
-        paths = [row[3] for row in self.model if row[3] not in completed]
-        count = self.selected_count
-        self.model.clear()
-        self.selected_count = 0
-        self.show_items(paths, failures)
+        count = len(self.plan)
+        self.show_plan([])
         self.status.set_text(tr("Cleaned {n} of {total}", n=len(done), total=count))
-        if any(item.kind in {"flatpak", "manual"} for item in done):
+        self.warnings([*self.scan_warnings, *failures])
+        if any(not item.is_cache for item in done):
             self.recovery = self.home_path / session
             self.recovery_button.show()
             self.recovery_button.set_tooltip_text(str(self.recovery))
@@ -242,10 +201,10 @@ class CleanerWindow(Gtk.Window):
             self.details.set_expanded(True)
 
 
-def run(manual=()):
+def run():
     if not Gtk.init_check()[0]:
         raise ValueError("XQuasar needs a graphical desktop. Run python3 -m xquasar for a terminal preview.")
-    window = CleanerWindow(Path.home(), manual)
+    window = CleanerWindow(Path.home())
     window.connect("destroy", lambda *_: Gtk.main_quit())
     Gtk.main()
     return 0

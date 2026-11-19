@@ -24,7 +24,7 @@ Section: utils
 Priority: optional
 Homepage: https://github.com/glitchykid/xquasar
 Description: Interactive Linux home folder cleaner
- Preview and clean selected cache files, empty folders and application
- leftovers from the desktop or the terminal. App profiles are recoverable.
+ Preview thumbnail and font caches and profiles left by uninstalled Flatpak
+ apps, then confirm cleanup. Personal folders and recovery copies are kept.
 EOF
 dpkg-deb --root-owner-group --build "$stage" "$output"

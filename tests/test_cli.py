@@ -43,22 +43,32 @@ class CleanerCLI(unittest.TestCase):
         target = self.directory("old-empty")
         preview = self.cli()
         self.assertEqual(preview.returncode, 0, preview.stderr)
-        self.assertIn("old-empty", preview.stdout)
-        for answer in ("", "\n", "no\n", "1\nno\n", "7\nyes\n"):
-            with self.subTest(answer=answer):
-                self.cli("--clean", answer=answer)
-                self.assertTrue(target.is_dir())
+        self.assertNotIn("old-empty", preview.stdout)
+        self.assertIn("No cleanup candidates", preview.stdout)
+        run = self.cli("--clean", answer="yes\n")
+        self.assertEqual(run.returncode, 0, run.stderr)
         self.assertEqual(list(self.home.iterdir()), [target])
 
-    def test_only_selected_empty_directory_is_removed(self):
-        first = self.directory("alpha")
-        other = self.directory("beta")
-        run = self.cli("--clean", answer="1\nyes\n")
+    def test_one_confirmation_cleans_only_identified_cache(self):
+        folder = self.directory(".cache/fontconfig")
+        valid = folder / ("a" * 32 + "-le64.cache-9")
+        valid.write_bytes(bytes.fromhex("04 fc 02 fc 09 00 00 00") + bytes(100))
+        unknown = folder / ("b" * 32 + "-le64.cache-9")
+        unknown.write_bytes(b"not a font cache")
+        personal = self.directory("Documents/New project")
+        config = self.directory(".config/UnknownApp")
+        for answer in ("", "\n", "no\n"):
+            run = self.cli("--clean", answer=answer)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertTrue(valid.is_file())
+        run = self.cli("--clean", answer="yes\n")
         self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertFalse(first.exists())
-        self.assertTrue(other.is_dir())
+        self.assertFalse(valid.exists())
+        self.assertTrue(unknown.is_file())
+        self.assertTrue(personal.is_dir())
+        self.assertTrue(config.is_dir())
 
-    def test_visible_empty_dirs_only_and_thumbnail_allowlist(self):
+    def test_personal_folders_are_kept_and_only_thumbnail_cache_is_removed(self):
         empty = self.directory("work/empty")
         protected = [self.directory(name) for name in
                      (".ssh/private", "repo/.git", "repo/assets", "Downloads", "docs/personal")]
@@ -68,13 +78,16 @@ class CleanerCLI(unittest.TestCase):
         (self.home / "link").symlink_to(outside, target_is_directory=True)
         folder = self.directory(".cache/thumbnails/normal")
         junk = folder / ("a" * 32 + ".png")
-        junk.write_bytes(b"cached image")
+        junk.write_bytes(b"\x89PNG\r\n\x1a\n" + bytes(64))
         (folder / "photo.png").write_bytes(b"personal")
+        disguised = folder / ("b" * 32 + ".png")
+        disguised.write_bytes(b"not a thumbnail")
         run = self.cli("--clean", answer="all\nyes\n")
         self.assertEqual(run.returncode, 0, run.stderr)
-        self.assertFalse(empty.exists())
+        self.assertTrue(empty.exists())
         self.assertFalse(junk.exists())
         self.assertTrue((folder / "photo.png").exists())
+        self.assertTrue(disguised.exists())
         self.assertTrue(all(p.is_dir() for p in protected))
         self.assertTrue(outside.is_dir())
         self.assertTrue((self.home / "link").is_symlink())

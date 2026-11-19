@@ -2,15 +2,17 @@
 
 ## Architecture
 
-The Python CLI owns prompts and presentation. The scanner returns candidates and partial errors while the executor reopens home-relative directories and checks the object's identity before acting. Linux directory file descriptors and mount IDs limit traversal. Moving app profiles within the same filesystem preserves data and avoids recursive deletion. Empty folders use `rmdir`, which fails if an entry appeared during review. Each successful action stands on its own if another item fails.
+The scanner checks the standard thumbnail and Fontconfig cache locations inside the home directory. It matches the filename and reads the signature from a regular file on the same mount. Thumbnail entries use the PNG signature. Fontconfig entries use the cache magic and the version and byte order from the filename. The scanner does not traverse personal directories. [Thumbnail specification](https://specifications.freedesktop.org/thumbnail/latest/) · [Fontconfig 2.15.0 cache header](https://github.com/fontconfig/fontconfig/blob/2.15.0/src/fcint.h)
 
-The optional GTK 3 desktop window calls the same scanner and executor. Both run on a worker thread. GTK widget updates run on the main loop. The desktop entry launches the packaged system-Python command with `--gui`. Linux Mint 22.3 provides GTK 3.24.41 and PyGObject 3.48.2. [GTK 3 TreeView](https://docs.gtk.org/gtk3/class.TreeView.html) · [PyGObject threading](https://pygobject.gnome.org/guide/threading.html) · [Desktop Entry specification](https://specifications.freedesktop.org/desktop-entry/latest/)
+The scanner returns candidates and partial errors to the CLI or desktop. Both show a preview before calling the executor. The executor reopens home-relative directories, checks the object's identity, and rechecks Flatpak's inventory before moving profiles intact to private recovery storage on the same filesystem. An incomplete inventory skips profile moves. Each successful action stands on its own if another item fails.
+
+The GTK 3 window scans on launch and shows category totals. The optional path list shows up to 200 entries. Scanning and cleaning run on a worker thread, and GTK widget updates run on the main loop. The desktop entry launches the packaged system-Python command with `--gui`. Linux Mint 22.3 provides GTK 3.24.41 and PyGObject 3.48.2. [GTK 3 Expander](https://docs.gtk.org/gtk3/class.Expander.html) · [PyGObject threading](https://pygobject.gnome.org/guide/threading.html) · [Desktop Entry specification](https://specifications.freedesktop.org/desktop-entry/latest/)
 
 Use Docker for development. The image runs tests as an ordinary user with private temporary homes and the real Flatpak CLI. To iterate after building the image, run `docker run --rm --network=none -v "$PWD:/workspace:ro" xquasar-dev` from the source checkout.
 
 The image targets Python 3.15.2. The CLI also supports Python 3.12+. Filesystem operations use the standard library. [Python 3.15 os](https://docs.python.org/3.15/library/os.html) · [Python 3.12 os](https://docs.python.org/3.12/library/os.html) · [Dockerfile reference](https://docs.docker.com/reference/dockerfile/) · [Flatpak list](https://docs.flatpak.org/en/latest/flatpak-command-reference.html#flatpak-list) · [Thumbnail specification](https://specifications.freedesktop.org/thumbnail/latest/)
 
-To build the installer from the checkout, run `sh packaging/build-deb.sh 0.2.0 /tmp/xquasar.deb`. The Docker suite installs the package, checks its menu launcher on a virtual X display, and exercises the window against temporary homes using Debian's system Python and GTK bindings. [dpkg-deb](https://manpages.debian.org/trixie/dpkg/dpkg-deb.1.en.html)
+To build the installer from the checkout, run `sh packaging/build-deb.sh 0.3.0 /tmp/xquasar.deb`. The Docker suite installs the package, checks its menu launcher on a virtual X display, and exercises the window against temporary homes using Debian's system Python and GTK bindings. [dpkg-deb](https://manpages.debian.org/trixie/dpkg/dpkg-deb.1.en.html)
 
 ## GitHub Wiki
 

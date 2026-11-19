@@ -25,11 +25,11 @@ class Safety(unittest.TestCase):
         folder = self.home / ".cache/thumbnails/normal"
         folder.mkdir(parents=True)
         thumbnail = folder / ("c" * 32 + ".png")
-        thumbnail.touch()
-        work = self.home / "work"
-        (work / "empty").mkdir(parents=True)
+        thumbnail.write_bytes(b"\x89PNG\r\n\x1a\n")
+        work = self.home / ".config"
+        (work / "OldEditor").mkdir(parents=True)
         with open_home(self.home) as home:
-            items, warnings = scan(home, [])
+            items, warnings = scan(home, [Path(".config/OldEditor")])
             self.assertEqual(warnings, [])
             thumbnail.write_bytes(b"replaced since preview")
             moved = self.home.parent / "moved"
@@ -38,7 +38,7 @@ class Safety(unittest.TestCase):
             done, warnings, _ = apply(home, items)
             self.assertEqual(done, [])
             self.assertEqual(len(warnings), 2)
-            self.assertTrue((work / "empty").is_dir())
+            self.assertTrue((work / "OldEditor").is_dir())
             self.assertTrue(thumbnail.exists())
 
     def test_customized_xdg_folder_and_linked_thumbnail_remain(self):
@@ -59,9 +59,33 @@ class Safety(unittest.TestCase):
         outside = self.home.parent / "cache"
         normal = outside / "thumbnails/normal"
         normal.mkdir(parents=True)
-        (normal / ("e" * 32 + ".png")).touch()
+        (normal / ("e" * 32 + ".png")).write_bytes(b"\x89PNG\r\n\x1a\n")
         with patch.dict(os.environ, {"XDG_CACHE_HOME": str(outside)}), open_home(self.home) as home:
             self.assertEqual(scan(home, []), ([], []))
+
+    def test_cache_in_a_recovery_copy_is_untouched(self):
+        cache = self.home / ".xquasar-recovery/old/.var/app/org.example.Old/cache"
+        folder = cache / "thumbnails/normal"
+        folder.mkdir(parents=True)
+        (folder / ("e" * 32 + ".png")).write_bytes(b"\x89PNG\r\n\x1a\n")
+        with patch.dict(os.environ, {"XDG_CACHE_HOME": str(cache)}), open_home(self.home) as home:
+            self.assertEqual(scan(home), ([], []))
+
+    def test_orphan_profile_retains_its_embedded_cache(self):
+        profile = Path(".var/app/org.example.Old")
+        cache = self.home / profile / "cache"
+        folder = cache / "thumbnails/normal"
+        folder.mkdir(parents=True)
+        thumbnail = folder / ("d" * 32 + ".png")
+        thumbnail.write_bytes(b"\x89PNG\r\n\x1a\n")
+        with (patch.dict(os.environ, {"XDG_CACHE_HOME": str(cache)}),
+              patch("xquasar.cleaner.installed_apps", return_value=set()), open_home(self.home) as home):
+            items, warnings = scan(home)
+            self.assertEqual(warnings, [])
+            self.assertEqual([item.path for item in items], [profile])
+            done, warnings, session = apply(home, items)
+            self.assertEqual((done, warnings), (items, []))
+            self.assertTrue((self.home / session / thumbnail.relative_to(self.home)).is_file())
 
     def test_quoted_xdg_folder_with_comment_is_preserved(self):
         (self.home / ".config").mkdir()
