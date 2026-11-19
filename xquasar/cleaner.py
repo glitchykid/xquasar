@@ -138,12 +138,20 @@ def protected_dirs(home):
                 if not stat.S_ISREG(os.fstat(source).st_mode):
                     raise OSError("invalid user-dirs.dirs")
                 for line in file:
-                    match = re.fullmatch(r'\s*XDG_\w+_DIR="([^"]*)"\s*', line.strip())
-                    if match:
-                        value = match[1].replace("$HOME/", str(home.path) + "/", 1)
-                        path = Path(value)
-                        if path.is_relative_to(home.path):
-                            protected.add(path.relative_to(home.path))
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    match = re.fullmatch(r'XDG_\w+_DIR="((?:[^"\\]|\\.)*)"\s*(?:#.*)?', line)
+                    if not match:
+                        raise OSError("unrecognized user-dirs.dirs assignment")
+                    value = re.sub(r'\\(["\\$`])', r'\1', match[1])
+                    if value == "$HOME" or value.startswith("$HOME/"):
+                        value = str(home.path) + value[len("$HOME"):]
+                    path = Path(os.path.normpath(value))
+                    if not path.is_absolute():
+                        raise OSError("unrecognized path in user-dirs.dirs")
+                    if path.is_relative_to(home.path):
+                        protected.add(path.relative_to(home.path))
     except FileNotFoundError:
         pass
     return protected

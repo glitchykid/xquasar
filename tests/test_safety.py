@@ -63,6 +63,15 @@ class Safety(unittest.TestCase):
         with patch.dict(os.environ, {"XDG_CACHE_HOME": str(outside)}), open_home(self.home) as home:
             self.assertEqual(scan(home, []), ([], []))
 
+    def test_quoted_xdg_folder_with_comment_is_preserved(self):
+        (self.home / ".config").mkdir()
+        (self.home / ".config/user-dirs.dirs").write_text(
+            r'XDG_DOWNLOAD_DIR="$HOME/My \"files\"" # local downloads' + "\n"
+        )
+        (self.home / 'My "files"').mkdir()
+        with open_home(self.home) as home:
+            self.assertEqual(scan(home, []), ([], []))
+
     def test_empty_directories_in_custom_xdg_data_roots_are_protected(self):
         (self.home / "Cache/active-app").mkdir(parents=True)
         with patch.dict(os.environ, {"XDG_CACHE_HOME": str(self.home / "Cache")}):
