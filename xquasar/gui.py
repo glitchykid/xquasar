@@ -13,7 +13,8 @@ from .gui_text import translate as tr
 
 
 GROUPS = {"thumbnail": "Thumbnail cache", "fontconfig": "Font cache",
-          "flatpak": "Uninstalled Flatpak profiles"}
+          "browser": "Browser and Electron cache", "bytecode": "Python bytecode",
+          "flatpak": "Uninstalled Flatpak profiles", "launcher": "Obsolete Flatpak launchers"}
 
 
 def button(label, callback):
@@ -99,7 +100,7 @@ class CleanerWindow(Gtk.Window):
             totals[item.kind][1] += item.size
         for kind, (count, size) in totals.items():
             value = str(count)
-            if kind != "flatpak" and count:
+            if kind not in {"flatpak", "launcher"} and count:
                 value += " · " + GLib.format_size(size)
             self.counts[kind].set_text(value)
         self.paths.set_visible(bool(items))
@@ -173,8 +174,11 @@ class CleanerWindow(Gtk.Window):
         cached = sum(item.is_cache for item in self.plan)
         dialog = Gtk.MessageDialog(transient_for=self, modal=True, message_type=Gtk.MessageType.QUESTION,
                                    text=tr("Apply this cleanup plan?"))
-        dialog.format_secondary_text(tr("Delete cache files: {n}", n=cached) + "\n" +
-                                     tr("Move profiles to recovery: {n}", n=len(self.plan) - cached))
+        summary = [tr("Delete cache files: {n}", n=cached),
+                   tr("Move to recovery (profiles and launchers): {n}", n=len(self.plan) - cached)]
+        if any(item.kind in {"browser", "bytecode"} for item in self.plan):
+            summary.append(tr("Browser and Python cache folders emptied by this cleanup are removed."))
+        dialog.format_secondary_text("\n".join(summary))
         dialog.add_buttons(tr("Cancel"), Gtk.ResponseType.CANCEL, tr("Clean"), Gtk.ResponseType.OK)
         dialog.set_default_response(Gtk.ResponseType.CANCEL)
         confirmed = dialog.run() == Gtk.ResponseType.OK

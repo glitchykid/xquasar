@@ -2,12 +2,15 @@
 
 from contextlib import contextmanager
 from dataclasses import dataclass
+import errno
 import os
 from pathlib import Path
 import re
 import stat
 import subprocess
 from uuid import uuid4
+
+from . import app_data
 
 
 DIRECTORY = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -98,7 +101,15 @@ class Candidate:
 
     @property
     def is_cache(self):
-        return self.kind in {"thumbnail", "fontconfig"}
+        return self.kind in {"thumbnail", "fontconfig", "browser", "bytecode"}
+
+    @property
+    def flatpak_id(self):
+        if self.kind == "flatpak":
+            return self.path.name
+        if self.kind == "launcher":
+            return self.path.stem
+        return None
 
     @classmethod
     def from_stat(cls, kind, path, info):
@@ -126,17 +137,27 @@ def xdg_relative(home, setting, default):
         return Path(default)
     if ".." in value.parts or not value.is_relative_to(home.path):
         return None
-    return value.relative_to(home.path)
+    relative = value.relative_to(home.path)
+    if not relative.parts or relative.is_relative_to(RECOVERY):
+        return None
+    return relative
 
 
 def identify_cache(home, parent, folder, entry, kind, pattern):
     match = pattern.fullmatch(entry.name)
     if not match or not entry.is_file(follow_symlinks=False):
         return None
-    header = PNG_HEADER
     if kind == "fontconfig":
         order = "little" if match[1] == "le" else "big"
         header = (0xFC02FC04).to_bytes(4, order) + int(match[2]).to_bytes(4, order)
+    elif kind == "browser":
+        header = app_data.BROWSER_HEADER
+    elif kind == "bytecode":
+        if not app_data.has_python_source(home, folder / entry.name):
+            return None
+        header = app_data.PYTHON_HEADER
+    else:
+        header = PNG_HEADER
     flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
     fd = os.open(entry.name, flags, dir_fd=parent)
     try:
@@ -148,13 +169,19 @@ def identify_cache(home, parent, folder, entry, kind, pattern):
     return None
 
 
-def cache_files(home, found, warnings):
-    cache = xdg_relative(home, "XDG_CACHE_HOME", ".cache")
-    if cache is None or cache.is_relative_to(RECOVERY):
-        return
-    folders = [(cache / "thumbnails" / size, "thumbnail", THUMBNAIL)
-               for size in ("normal", "large", "x-large", "xx-large")]
-    folders.append((cache / "fontconfig", "fontconfig", FONT_CACHE))
+def cache_files(home, roots, found, warnings):
+    cache = roots["cache"]
+    thumbnail_roots = [Path(".thumbnails")]
+    folders = []
+    if cache is not None:
+        thumbnail_roots.append(cache / "thumbnails")
+        folders.append((cache / "fontconfig", "fontconfig", FONT_CACHE))
+    for root in thumbnail_roots:
+        folders.extend((root / size, "thumbnail", THUMBNAIL)
+                       for size in ("normal", "large", "x-large", "xx-large"))
+    app_roots = {root for root in roots.values() if root is not None}
+    folders.extend(app_data.browser_cache_folders(home, app_roots, warnings))
+    folders.extend(app_data.python_cache_folders(home, warnings))
     for folder, kind, pattern in folders:
         try:
             with home.directory(folder) as parent, os.scandir(parent) as entries:
@@ -167,32 +194,67 @@ def cache_files(home, found, warnings):
                         continue
                     except OSError as exc:
                         warnings.append(f"{str(folder / entry.name)!r}: {exc}")
-        except FileNotFoundError:
+        except (FileNotFoundError, NotADirectoryError):
             continue
         except OSError as exc:
             warnings.append(f"{str(folder)!r}: {exc}")
 
 
-def orphan_dirs(home, found):
+def launcher_candidates(home, folder, warnings):
     try:
-        with home.directory(APP_DATA) as fd, os.scandir(fd) as entries:
-            names = {entry.name for entry in entries if APP_ID.fullmatch(entry.name)
-                     and entry.is_dir(follow_symlinks=False)}
-    except FileNotFoundError:
+        with home.directory(folder) as parent, os.scandir(parent) as entries:
+            for entry in entries:
+                name = entry.name
+                if not name.endswith(".desktop") or not APP_ID.fullmatch(name[:-8]):
+                    continue
+                try:
+                    if not entry.is_file(follow_symlinks=False):
+                        continue
+                    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+                    with os.fdopen(fd, "rb", buffering=0) as stream:
+                        info = os.fstat(fd)
+                        if not stat.S_ISREG(info.st_mode) or info.st_size > 65536 or mount_id(fd) != home.mount:
+                            continue
+                        if app_data.is_flatpak_launcher(stream.read(65537), name[:-8]) and os.fstat(fd).st_ctime_ns == info.st_ctime_ns:
+                            yield Candidate.from_stat("launcher", folder / name, info)
+                except FileNotFoundError:
+                    continue
+                except OSError as exc:
+                    warnings.append(f"{str(folder / name)!r}: {exc}")
+    except (FileNotFoundError, NotADirectoryError):
         return
-    if names:
-        installed = installed_apps()
-        for name in sorted(names - installed):
+    except OSError as exc:
+        warnings.append(f"{str(folder)!r}: {exc}")
+
+
+def flatpak_items(home, roots, found, warnings):
+    possible = []
+    for root, subdir in ((roots["config"], "autostart"), (roots["data"], "applications")):
+        if root is not None:
+            possible.extend(launcher_candidates(home, root / subdir, warnings))
+    for name in app_data.directories(home, APP_DATA, warnings):
+        if APP_ID.fullmatch(name):
             path = APP_DATA / name
-            with home.directory(path) as fd:
-                found.append(Candidate.from_stat("flatpak", path, os.fstat(fd)))
+            try:
+                with home.directory(path) as fd:
+                    possible.append(Candidate.from_stat("flatpak", path, os.fstat(fd)))
+            except FileNotFoundError:
+                continue
+            except OSError as exc:
+                warnings.append(f"{str(path)!r}: {exc}")
+    if possible:
+        installed = installed_apps()
+        found.extend(item for item in possible if item.flatpak_id not in installed)
 
 
 def scan(home, manual=()):
     found, warnings = [], []
-    cache_files(home, found, warnings)
+    roots = {key: xdg_relative(home, "XDG_" + key.upper() + "_HOME", default)
+             for key, default in (("config", ".config"), ("cache", ".cache"),
+                                  ("data", ".local/share"), ("state", ".local/state"))}
+    cache_files(home, roots, found, warnings)
     try:
-        orphan_dirs(home, found)
+        flatpak_items(home, roots, found, warnings)
     except OSError as exc:
         warnings.append(f"Flatpak: {exc}")
     for path in set(manual):
@@ -203,13 +265,25 @@ def scan(home, manual=()):
             warnings.append(f"{str(path)!r}: {exc}")
     moved_dirs = {item.path for item in found if not item.is_cache}
     plan = [item for item in found if moved_dirs.isdisjoint(item.path.parents)]
-    return sorted(plan, key=lambda item: item.path), warnings
+    return sorted(set(plan), key=lambda item: item.path), warnings
+
+
+def prune_cache_dir(home, folder, opened, warnings):
+    # rmdir is atomic with respect to entries created since the preview.
+    try:
+        with home.directory(folder.parent) as fd:
+            current = os.stat(folder.name, dir_fd=fd, follow_symlinks=False)
+            if os.path.samestat(current, os.fstat(opened)):
+                os.rmdir(folder.name, dir_fd=fd)
+    except OSError as exc:
+        if exc.errno not in (errno.ENOTEMPTY, errno.EEXIST, errno.ENOENT):
+            warnings.append(f"{str(folder)!r}: {exc}")
 
 
 def apply(home, selected):
     warnings, completed = [], []
     installed = None
-    if any(item.kind == "flatpak" for item in selected):
+    if any(item.flatpak_id for item in selected):
         try:
             installed = installed_apps()
         except OSError as exc:
@@ -223,9 +297,13 @@ def apply(home, selected):
                 if Candidate.from_stat(item.kind, path, info) != item:
                     raise OSError("changed since preview")
                 if item.is_cache:
+                    if item.kind == "bytecode" and not app_data.has_python_source(home, path):
+                        raise OSError("Python source no longer available")
                     os.unlink(path.name, dir_fd=parent)
-                elif item.kind in {"manual", "flatpak"}:
-                    if item.kind == "flatpak" and (installed is None or path.name in installed):
+                    if item.kind in {"bytecode", "browser"}:
+                        prune_cache_dir(home, path.parent, parent, warnings)
+                elif item.kind == "manual" or item.flatpak_id:
+                    if item.flatpak_id and (installed is None or item.flatpak_id in installed):
                         raise OSError("Flatpak removal could not be confirmed")
                     with home.directory(session / path.parent, private=True, create=True) as dest:
                         os.rename(path.name, path.name, src_dir_fd=parent, dst_dir_fd=dest)

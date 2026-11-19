@@ -2,9 +2,13 @@
 
 # Automatic cleanup and recovery
 
-1. Open **XQuasar** from the applications menu and wait for the summary. Each cache category shows the file count and size. The Flatpak row counts profiles that can be moved to recovery. Empty personal folders are preserved.
-2. Choose **Show paths** to inspect the plan. Select **Clean up…** to see how many cache files will be deleted and how many profiles will be moved. Confirm or cancel.
-3. To restore a profile, choose **Open recovery folder** after cleanup. Close the app and move its folder back to the original path. If that path already exists, keep both copies and compare them first. Deleting the recovery copy frees its disk space.
+1. Open **XQuasar** from the applications menu. The summary shows each cache category, including Chromium/Electron and Python, plus recoverable Flatpak profiles and launchers. Unknown directories and personal files are omitted.
+2. Choose **Show paths** to inspect the candidates. **Clean up…** shows the number of cache files to delete and items to move before asking for confirmation.
+3. After cleanup, choose **Open recovery folder** to find a saved launcher or profile. To restore it, close the affected app and move the item back to its original path. If a replacement already exists, keep both copies and compare them first.
+
+**Application caches** — XQuasar recognises Chromium and Electron disk and code cache entries inside app directories in `.config`, `.local/share`, `.local/state` and `.cache`. It checks the file header and name. It also checks old thumbnails in `~/.thumbnails` and Python bytecode in `~/.local/lib/python3.*/site-packages` when the matching source exists. A recognised browser or Python cache folder is removed if cleaning its files leaves it empty.
+
+**Flatpak launchers** — Menu entries in `.local/share/applications` and startup entries in `.config/autostart` move to recovery when the filename, Flatpak marker and launch command identify the same uninstalled app. XQuasar rechecks the installed apps before moving anything from Flatpak.
 
 From a source checkout, `python3 -m xquasar` shows a preview. Run `python3 -m xquasar --clean` and type `yes` to apply it. A `Skipped` message identifies an incomplete check or action. Exit codes are 0 for success or cancellation, 1 for a partial result and 2 for invalid input or an inaccessible home.
 

@@ -50,7 +50,8 @@ def main():
             for warning in warnings:
                 print(f"Skipped: {warning}", file=sys.stderr)
             for index, item in enumerate(items, 1):
-                action = {"fontconfig": "delete font cache", "thumbnail": "delete thumbnail",
+                action = {"browser": "delete browser cache", "bytecode": "delete Python cache",
+                          "launcher": "recoverable move", "fontconfig": "delete font cache", "thumbnail": "delete thumbnail",
                           "manual": "recoverable move", "flatpak": "recoverable move"}[item.kind]
                 print(f"{index:4}  {item.kind:9}  {str(item.path)!r}  ({action})")
             if not items:
@@ -62,7 +63,7 @@ def main():
                     for failure in failures:
                         print(f"Skipped: {failure}", file=sys.stderr)
                     print(f"Cleaned {len(done)} of {len(selected)} selected item(s).")
-                    if any(item.kind in {"flatpak", "manual"} for item in done):
+                    if any(not item.is_cache for item in done):
                         print(f"Recovery directory: {str(home.path / session)!r}")
                     warnings.extend(failures)
                 else:

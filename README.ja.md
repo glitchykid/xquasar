@@ -2,7 +2,7 @@
 
 # XQuasar
 
-XQuasar は Linux のホームにあるサムネイルとフォントのキャッシュ、アンインストール済みの Flatpak アプリのプロファイルを自動で検出します。起動時に整理の候補を表示し、空のものも含めて個人用フォルダーを保持します。
+XQuasar は Linux のホームにある再生成可能なキャッシュと、アンインストール済みの Flatpak アプリの残存データを自動で検出します。起動すると整理の候補を確認できます。所有元を特定できないフォルダーと個人のファイルは保持します。
 
 ## Linux Mint・Ubuntu・Debian へのインストール
 
@@ -15,7 +15,7 @@ XQuasar は Linux のホームにあるサムネイルとフォントのキャ�
 ソースからインストーラーを作成するコマンドは
 
 ```sh
-sh packaging/build-deb.sh 0.3.0 ./xquasar.deb
+sh packaging/build-deb.sh 0.4.0 ./xquasar.deb
 ```
 
 ## ソースから CLI を実行する
@@ -37,7 +37,9 @@ python3 -m xquasar --clean
 ## 整理の対象
 
 - **再生成できるキャッシュ** — `$XDG_CACHE_HOME/thumbnails` の 4 つのサイズ別フォルダーにある PNG と、`$XDG_CACHE_HOME/fontconfig` のキャッシュファイルが対象です。ファイル名とヘッダーの両方で形式を確認します。キャッシュの既定の場所は `~/.cache` です。
+- **アプリのキャッシュ** — `.config`、`.local/share`、`.local/state`、`.cache` 内のアプリ用ディレクトリで、Chromium と Electron のディスクキャッシュやコードキャッシュをファイル名とヘッダーで識別します。`~/.thumbnails` の旧形式の保存先と、対応するソースがある `~/.local/lib/python3.*/site-packages` の Python バイトコードも対象です。これらのブラウザーまたは Python のキャッシュフォルダーが整理によって空になった場合は削除します。
 - **Flatpak のプロファイル** — `~/.var/app` とインストール済みアプリの一覧を照合し、実行の確認後に再度照合します。一覧を取得できない場合はプロファイルをスキップします。その他のキャッシュや用途を特定できないアプリのフォルダーは保持します。
+- **Flatpak のランチャー** — `.local/share/applications` のメニュー項目や `.config/autostart` の自動起動項目は、ファイル名、Flatpak の識別子、起動コマンドが同じ削除済みアプリを示す場合に退避します。移動の直前にインストール済みアプリを再確認します。
 - **その他のアプリ** — 削除済みアプリのディレクトリが分かっている場合は、ホームからの相対パスを `--leftover` で指定できます。対象は `.config`、`.cache`、`.local/share`、`.local/state` の直下です。複数ある場合はオプションを繰り返します。例：`python3 -m xquasar --clean --leftover .config/OldEditor`。
 
 アプリのフォルダーはプロファイルやセーブデータごと `~/.xquasar-recovery/<実行ID>/<元のパス>` に移動します。復元するにはアプリを終了し、元のパスが空いていることを確認してから戻してください。ディスク容量が空くのは、退避したフォルダーを自分で削除した時点です。

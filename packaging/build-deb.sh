@@ -24,7 +24,7 @@ Section: utils
 Priority: optional
 Homepage: https://github.com/glitchykid/xquasar
 Description: Interactive Linux home folder cleaner
- Preview thumbnail and font caches and profiles left by uninstalled Flatpak
- apps, then confirm cleanup. Personal folders and recovery copies are kept.
+ Find regenerable caches in Linux home and XDG application directories.
+ Confirm cleanup and recover profiles or launchers left by uninstalled Flatpaks.
 EOF
 dpkg-deb --root-owner-group --build "$stage" "$output"

@@ -2,7 +2,7 @@
 
 # XQuasar
 
-XQuasar는 Linux 홈 폴더에서 미리보기 이미지와 글꼴 캐시, 삭제한 Flatpak 앱의 프로필을 자동으로 찾습니다. 앱을 열면 정리할 항목이 표시됩니다. 빈 폴더를 포함한 개인 폴더는 그대로 보관합니다.
+XQuasar는 Linux 홈에서 다시 생성할 수 있는 캐시와 삭제한 Flatpak 앱의 잔여 데이터를 자동으로 찾습니다. 앱을 열면 정리할 항목을 확인할 수 있습니다. 용도가 불분명한 폴더와 개인 파일은 그대로 보관합니다.
 
 ## Linux Mint, Ubuntu, Debian에 설치
 
@@ -15,7 +15,7 @@ XQuasar는 Linux 홈 폴더에서 미리보기 이미지와 글꼴 캐시, 삭�
 소스에서 설치 파일을 만들려면 다음 명령을 실행하세요
 
 ```sh
-sh packaging/build-deb.sh 0.3.0 ./xquasar.deb
+sh packaging/build-deb.sh 0.4.0 ./xquasar.deb
 ```
 
 ## 소스에서 CLI 실행
@@ -37,7 +37,9 @@ python3 -m xquasar --clean
 ## 정리 대상
 
 - **다시 생성되는 캐시** — `$XDG_CACHE_HOME/thumbnails` 아래의 네 가지 크기별 폴더에 있는 PNG와 `$XDG_CACHE_HOME/fontconfig`에 있는 글꼴 캐시를 확인합니다. 파일 이름과 헤더가 모두 해당 형식과 일치해야 합니다. 기본 캐시 위치는 `~/.cache`입니다.
+- **앱 캐시** — `.config`, `.local/share`, `.local/state`, `.cache`의 앱 폴더에서 이름과 헤더로 Chromium 및 Electron의 디스크 캐시와 코드 캐시를 식별합니다. `~/.thumbnails`의 예전 미리보기 이미지와 `~/.local/lib/python3.*/site-packages`에서 원본 소스가 남아 있는 Python 바이트코드도 찾습니다. 브라우저 또는 Python 캐시 파일을 지운 뒤 해당 캐시 폴더가 비면 함께 삭제합니다.
 - **Flatpak 프로필** — `~/.var/app`과 설치된 앱 목록을 비교하고 사용자가 정리를 확인한 뒤 다시 검사합니다. 목록을 가져올 수 없으면 프로필을 건너뜁니다. 다른 캐시와 용도를 확인할 수 없는 앱 폴더는 보관합니다.
+- **Flatpak 바로가기** — `.local/share/applications`의 메뉴 항목과 `.config/autostart`의 자동 시작 항목은 파일 이름, Flatpak 표식, 실행 명령이 같은 삭제된 앱을 가리킬 때 복구 폴더로 옮깁니다. 이동 직전에 설치된 앱 목록을 다시 확인합니다.
 - **다른 앱의 잔여 데이터** — 삭제한 앱의 경로를 알고 있으면 `--leftover`로 지정하세요. 홈 기준 상대 경로이며 `.config`, `.cache`, `.local/share`, `.local/state` 바로 아래의 디렉터리여야 합니다. 여러 개는 옵션을 반복해 지정합니다. 예시 명령은 `python3 -m xquasar --clean --leftover .config/OldEditor`입니다.
 
 앱 폴더는 프로필과 저장 데이터를 포함해 `~/.xquasar-recovery/<실행 ID>/<원래 경로>`로 이동합니다. 복구하려면 앱을 종료하고 원래 위치에 같은 이름의 항목이 없는지 확인한 뒤 되돌리세요. 디스크 공간은 복구용 사본을 직접 지울 때 확보됩니다.

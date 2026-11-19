@@ -99,6 +99,22 @@ class DesktopFlow(unittest.TestCase):
         self.idle()
         self.assertFalse(self.window.clean_button.get_sensitive())
 
+    def test_application_cache_appears_and_unknown_config_stays_hidden(self):
+        file = self.home / ".config/Editor/Code Cache/js/aaaaaaaaaaaaaaaa_0"
+        file.parent.mkdir(parents=True)
+        file.write_bytes(bytes.fromhex("305c72a71b6dfbfc") + bytes(24))
+        self.window.rescan_button.clicked()
+        self.idle()
+        self.assertTrue(self.window.counts["browser"].get_text().startswith("1"))
+        self.window.paths.set_expanded(True)
+        buf = self.window.path_text
+        preview = buf.get_text(*buf.get_bounds(), True)
+        self.assertIn("Code Cache/js", preview)
+        self.assertNotIn("OldEditor", preview)
+        self.confirm(Gtk.ResponseType.OK)
+        self.assertFalse(file.exists())
+        self.assertTrue(self.app.is_dir())
+
     def test_incomplete_scan_offers_retry(self):
         self.cache.unlink()
         (self.home / ".var/app/org.example.Unknown").mkdir(parents=True)
