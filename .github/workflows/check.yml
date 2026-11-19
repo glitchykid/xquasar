@@ -43,6 +43,6 @@ jobs:
           package="$RUNNER_TEMP/xquasar.deb"
           sh packaging/build-deb.sh "${TAG#v}" "$package"
           sudo apt-get update -qq
-          sudo apt-get install -y "$package" xvfb xauth xdotool
+          sudo apt-get install -y "$package" xvfb xauth xdotool flatpak
           xvfb-run -a /usr/bin/python3 packaging/test-desktop.py
           gh release create "$TAG" "$archive" "$package" --verify-tag --title "XQuasar $TAG" --notes-file "$notes"
